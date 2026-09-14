@@ -21,7 +21,10 @@ export const FLIGHT = {
   dragFlap: 0.0012, // extra cost of beating your wings
 
   maxBank: 1.25, // rad
-  bankRate: 3.4, // rad/s the bank chases the steer input
+  // Critically damped roll: it eases in and settles without overshoot, where a
+  // plain rate limit ramps at a constant speed and then stops dead.
+  bankResponse: 5.2, // rad/s natural frequency
+  bankMaxRate: 3.6, // rad/s ceiling, so a snapped shoulder cannot whip the bird
   bankLiftCompensation: 0.75,
 
   flapImpulse: 7, // m/s along the wing's lift axis, at full power
@@ -41,6 +44,7 @@ export class BirdFlight {
     this.pos = new THREE.Vector3(0, 60, 0);
     this.vel = new THREE.Vector3(0, 0, -FLIGHT.cruiseSpeed);
     this.bank = 0;
+    this.bankVel = 0;
     this.stamina = 100;
     this.alive = true;
 
@@ -56,6 +60,7 @@ export class BirdFlight {
     this.pos.set(0, 60, 0);
     this.vel.set(0, 0, -FLIGHT.cruiseSpeed);
     this.bank = 0;
+    this.bankVel = 0;
     this.stamina = 100;
     this.alive = true;
     this.flapPulse = 0;
@@ -91,8 +96,10 @@ export class BirdFlight {
 
     /* ---- bank chases the steer input ---- */
     const targetBank = steer * FLIGHT.maxBank;
-    const bankStep = FLIGHT.bankRate * dt;
-    this.bank += clamp(targetBank - this.bank, -bankStep, bankStep);
+    const w = FLIGHT.bankResponse;
+    const accel = w * w * (targetBank - this.bank) - 2 * w * this.bankVel;
+    this.bankVel = clamp(this.bankVel + accel * dt, -FLIGHT.bankMaxRate, FLIGHT.bankMaxRate);
+    this.bank = clamp(this.bank + this.bankVel * dt, -FLIGHT.maxBank, FLIGHT.maxBank);
 
     /* ---- flight axes ---- */
     let speed = this.vel.length();

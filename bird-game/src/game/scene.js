@@ -314,34 +314,49 @@ export class ChaseCamera {
     this.fov = 62;
     this._desired = new THREE.Vector3();
     this._dir = new THREE.Vector3();
+    this._scratch = new THREE.Vector3();
+    // Each flap is a velocity impulse. Aiming the camera straight down the raw
+    // velocity would jolt the whole view on every beat, so it follows a lagged
+    // copy of the flight direction instead.
+    this.aim = new THREE.Vector3(0, 0, -1);
+    this.shake = new THREE.Vector3();
   }
 
   reset(flight) {
-    this.#desiredPosition(flight, 0);
+    this.aim.copy(flight.vel).normalize();
+    this.shake.set(0, 0, 0);
+    this.#desiredPosition(flight);
     this.pos.copy(this._desired);
     this.look.copy(flight.pos);
   }
 
-  #desiredPosition(flight, shakeAmount) {
-    const dir = this._dir.copy(flight.vel).normalize();
+  #desiredPosition(flight) {
+    const dir = this._dir.copy(this.aim);
     const back = 17 + flight.speed * 0.16;
     const up = 4.5 + Math.max(0, -dir.y) * 5;
     this._desired
       .copy(flight.pos)
       .addScaledVector(dir, -back)
       .addScaledVector(UP, up);
-    if (shakeAmount > 0) {
-      this._desired.x += (Math.random() - 0.5) * shakeAmount;
-      this._desired.y += (Math.random() - 0.5) * shakeAmount;
-    }
+    this._desired.add(this.shake);
   }
 
   update(dt, flight, speedNorm) {
-    this.#desiredPosition(flight, speedNorm * 0.5);
+    // lag the aim behind the real heading; turns still read, flap jolts do not
+    this.aim.lerp(this._scratch.copy(flight.vel).normalize(), 1 - Math.exp(-dt * 6.5));
+    this.aim.normalize();
+
+    // drift the shake offset rather than resampling noise every frame, which at
+    // high framerates just looks like static
+    const amp = Math.max(0, speedNorm - 0.35) * 0.55;
+    this._scratch.set((Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp, 0);
+    this.shake.lerp(this._scratch, 1 - Math.exp(-dt * 9));
+
+    this.#desiredPosition(flight);
     const k = 1 - Math.exp(-dt * 7.5);
     this.pos.lerp(this._desired, k);
 
-    const dir = this._dir.copy(flight.vel).normalize();
+    const dir = this._dir.copy(this.aim);
     const target = this.look.copy(flight.pos).addScaledVector(dir, 22);
 
     // rolling the camera into the bank is most of what sells a turn

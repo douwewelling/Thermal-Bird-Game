@@ -40,7 +40,13 @@ const poseReader = new GestureReader();
 const keyboard = new KeyboardGestures();
 
 let reader = poseReader;
-let mode = "boot"; // boot | title | calibrating | playing | dying | dead
+let mode = "boot"; // boot | title | calibrating | playing | paused | dying | dead
+// The reader already rides out brief dropouts, so this only has to cover the
+// gap between "really gone" and "flying blind into a wall".
+const LOST_PAUSE = 0.25; // s after the reader gives up before the run pauses
+const RESUME_DELAY = 1.5; // s of countdown once the player is back in frame
+let lostTimer = 0;
+let resumeTimer = 0;
 let calibration = 0;
 let crashTimer = 0;
 let lastResult = null;
@@ -127,8 +133,33 @@ function startRun() {
   bird.reset();
   chase.reset(flight);
   prevPos.copy(flight.pos);
+  accumulator = 0;
+  lostTimer = 0;
   hud.reset();
   hud.show(true);
+  setScreen(false);
+}
+
+/**
+ * Walking out of frame should not cost you a run. The flight freezes until the
+ * player is back, then hands control over with a countdown rather than dropping
+ * them straight back into a dive.
+ */
+function pauseRun() {
+  mode = "paused";
+  resumeTimer = RESUME_DELAY;
+  el.card.innerHTML = `
+    <h1 class="title" style="font-size:38px">Paused</h1>
+    <p class="status" id="pause-hint">Step back into view of the camera.</p>
+    <p class="footnote">The run is waiting for you — nothing is lost.</p>`;
+  setScreen(true);
+}
+
+function resumeRun() {
+  mode = "playing";
+  accumulator = 0;
+  lostTimer = 0;
+  prevPos.copy(flight.pos);
   setScreen(false);
 }
 
@@ -337,7 +368,7 @@ function showBlocker(title, html) {
 }
 
 addEventListener("keydown", (e) => {
-  if (e.code === "KeyR" && (mode === "playing" || mode === "dead")) startRun();
+  if (e.code === "KeyR" && (mode === "playing" || mode === "paused" || mode === "dead")) startRun();
 });
 
 /* ------------------------------------------------------------------ *
@@ -345,6 +376,8 @@ addEventListener("keydown", (e) => {
  * ------------------------------------------------------------------ */
 
 let last = performance.now();
+const PHYSICS_STEP = 1 / 120;
+let accumulator = 0;
 
 function frame(now) {
   requestAnimationFrame(frame);
@@ -373,7 +406,7 @@ function frame(now) {
           : "Arms straight out to the sides, level with your shoulders.";
     }
     if (calibration >= CALIBRATION_SECONDS) finishCalibration();
-  } else if (mode === "playing" || mode === "dying") {
+  } else if (mode === "playing" || mode === "dying" || mode === "paused") {
     gesture = reader.update(lastResult, dt);
   } else if (mode === "title" && cameraReady && el.status.isConnected) {
     // prove the camera works before anyone commits to a run
@@ -387,10 +420,41 @@ function frame(now) {
     }
   }
 
+  // losing the player mid-run pauses instead of letting the bird fly on blind
+  if (mode === "playing" && reader === poseReader) {
+    lostTimer = gesture.tracked ? 0 : lostTimer + dt;
+    if (lostTimer > LOST_PAUSE) pauseRun();
+  }
+
+  if (mode === "paused") {
+    const hint = $("pause-hint");
+    if (gesture.tracked) {
+      resumeTimer -= dt;
+      if (hint) hint.textContent = `Got you. Resuming in ${Math.ceil(resumeTimer)}…`;
+      if (resumeTimer <= 0) resumeRun();
+    } else {
+      resumeTimer = RESUME_DELAY;
+      if (hint) hint.textContent = "Step back into view of the camera.";
+    }
+  }
+
   if (mode === "playing") {
     prevPos.copy(flight.pos);
-    flight.update(dt, gesture, canyon);
-    flight.vel.y -= canyon.ceilingPush(flight.pos) * dt;
+
+    // Physics runs on a fixed step so the flight model feels identical at 30, 60
+    // or 144fps, and so a fast dive is collision-checked several times per frame
+    // instead of teleporting past a spire.
+    accumulator = Math.min(accumulator + dt, 0.2);
+    let step = gesture;
+    let hit = null;
+    while (accumulator >= PHYSICS_STEP && !hit) {
+      flight.update(PHYSICS_STEP, step, canyon);
+      flight.vel.y -= canyon.ceilingPush(flight.pos) * PHYSICS_STEP;
+      accumulator -= PHYSICS_STEP;
+      // the flap is an impulse, so it must land exactly once however many steps run
+      if (step.flap) step = { ...step, flap: null };
+      hit = canyon.collide(flight.pos);
+    }
 
     const d = distanceOf(flight.pos.z);
     canyon.ensure(d);
@@ -404,7 +468,6 @@ function frame(now) {
     session.combo = rings.combo;
     session.score = Math.floor(session.distance) + session.ringScore;
 
-    const hit = canyon.collide(flight.pos);
     if (hit) {
       session.cause = hit;
       flight.alive = false;
@@ -425,7 +488,7 @@ function frame(now) {
     }
   }
 
-  if (mode === "playing" || mode === "dying" || mode === "dead") {
+  if (mode === "playing" || mode === "paused" || mode === "dying" || mode === "dead") {
     const speedNorm = (flight.speed - FLIGHT.minSpeed) / (FLIGHT.maxSpeed - FLIGHT.minSpeed);
     bird.update(dt, flight, gesture);
     chase.update(dt, flight, Math.max(0, speedNorm));

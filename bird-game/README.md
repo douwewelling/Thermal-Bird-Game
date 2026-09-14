@@ -81,6 +81,38 @@ webcam ─► PoseLandmarker ─► GestureReader ─► BirdFlight ─► three
   both the mesh builder and the collision check call — so what you see is what
   you hit. It narrows as you get further out; that is the difficulty curve.
 
+## Why it feels smooth
+
+Three things were making the game jitter, and all three were framerate bugs
+rather than missing filters:
+
+- **The camera samples slower than the screen draws.** Inference only runs when
+  the webcam produces a new frame, so the tracker hands back the *same* result
+  object in between. Re-filtering it fed the one-euro velocity estimator
+  duplicates, which changed how hard a flap registered: the identical arm
+  movement scored 0.64 at 30fps and 1.07 at 120fps, and above 100fps it
+  produced phantom extra flaps. `GestureReader` now treats object identity as
+  the freshness test and measures only on real samples, then eases its outputs
+  toward that reading every frame — which also removes the 30Hz staircase from
+  steering without adding noticeable lag.
+- **Physics ran on the render delta.** A steady glide ended up anywhere between
+  8.7m and 13.4m of altitude over twelve seconds depending on framerate. It now
+  runs on a fixed 1/120s step with an accumulator, which also collision-checks a
+  fast dive several times per frame instead of letting it skip past a spire.
+- **The camera aimed straight down the velocity vector**, so every flap impulse
+  jolted the whole view. It follows a lagged copy of the flight direction now.
+
+Roll is a critically damped spring rather than a linear rate limit, so turns
+ease in and settle instead of ramping and stopping dead.
+
+## Losing the player
+
+Walking out of frame pauses the run instead of flying the bird blind into a
+wall. The reader rides out brief dropouts (a hard flap can hide your wrists for
+a frame or two) by drifting toward a neutral glide; only a real absence pauses,
+and coming back gives you a short countdown rather than dropping you straight
+into whatever dive you left behind.
+
 ## The cartoon look
 
 Nothing here is textured or post-processed. The style comes from four choices:

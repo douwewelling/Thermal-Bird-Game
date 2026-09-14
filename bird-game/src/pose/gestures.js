@@ -29,6 +29,14 @@ export const TUNE = {
   steerDeadzone: 0.07,
 
   visibilityFloor: 0.45,
+
+  // The camera delivers ~30 poses/s while the game renders at 60+. Controls are
+  // therefore eased toward the latest reading every frame, which removes the
+  // staircase without adding meaningful lag.
+  easeTau: 0.05, // s, for tuck/glide/wing
+  steerTau: 0.075, // s, steering wants to feel a touch heavier
+  lostTau: 0.3, // s, drifting back to neutral when the body is lost
+  lostGrace: 0.35, // s a dropout is ignored before neutral is targeted
 };
 
 /* ------------------------------------------------------------------ *
@@ -152,6 +160,12 @@ function measure(world, landmarks, armRef = null) {
   };
 }
 
+/**
+ * What the bird is told to do when nobody is being tracked: wings held out in a
+ * steady glide, no steering. Losing the player should never slam the controls.
+ */
+const NEUTRAL = () => ({ wingAngle: 0, spread: 0.9, extension: 0.9, tuck: 0, glide: 0.6, steer: 0 });
+
 /* ------------------------------------------------------------------ *
  * GestureReader — turns pose frames into flight intent
  * ------------------------------------------------------------------ */
@@ -173,6 +187,13 @@ export class GestureReader {
     this.flapCooldown = 0;
     this.flapActivity = 0;
 
+    this.lastResult = null;
+    this.sinceSample = 0;
+    this.lostFor = 0;
+    // what the latest pose asked for, and what the bird is actually being given
+    this.target = NEUTRAL();
+    this.smooth = NEUTRAL();
+    this.measured = null;
     this.out = this.#blank();
   }
 
@@ -196,14 +217,18 @@ export class GestureReader {
 
   /* ---- calibration: player stands in a T-pose for a couple of seconds ---- */
   beginCalibration() {
-    this.samples = { bank: [], lean: [], arm: [], spread: [] };
+    this.samples = { bank: [], lean: [], arm: [], spread: [], last: null, quality: 0 };
   }
 
   /** Feed a pose frame during calibration. Returns 0..1 quality of the current pose. */
   sampleCalibration(result) {
     if (!result || !this.samples) return 0;
+    // called every render frame, but only every other one carries a new pose
+    if (result === this.samples.last) return this.samples.quality;
+    this.samples.last = result;
+
     const m = measure(result.world, result.landmarks);
-    if (!m || m.visibility < TUNE.visibilityFloor) return 0;
+    if (!m || m.visibility < TUNE.visibilityFloor) return (this.samples.quality = 0);
 
     const spread = (m.spreadL + m.spreadR) / 2;
     const levelness = 1 - clamp((Math.abs(m.wingAngleL) + Math.abs(m.wingAngleR)) / 2 / 0.6, 0, 1);
@@ -214,7 +239,7 @@ export class GestureReader {
       this.samples.arm.push(m.armLen);
       this.samples.spread.push(spread);
     }
-    return quality;
+    return (this.samples.quality = quality);
   }
 
   finishCalibration() {
@@ -235,15 +260,63 @@ export class GestureReader {
     this.flapCooldown = Math.max(0, this.flapCooldown - dt);
     this.flapActivity *= Math.exp(-dt / TUNE.flapDecay);
 
-    if (!result) {
-      this.out = { ...this.#blank(), flapActivity: this.flapActivity };
-      return this.out;
+    // Inference only runs when the webcam produces a new frame, so the tracker
+    // hands back the very same object on most render frames. Re-filtering it
+    // would feed the velocity estimator duplicates and sap the speed a flap is
+    // scored on, so identity is the freshness test.
+    const fresh = !!result && result !== this.lastResult;
+    this.sinceSample += dt;
+    let flap = null;
+
+    if (fresh) {
+      this.lastResult = result;
+      flap = this.#analyse(result, clamp(this.sinceSample, 1 / 240, 1 / 10));
+      this.sinceSample = 0;
     }
 
+    // a blink of lost tracking keeps the last intent; a real loss drifts to neutral
+    this.lostFor = result ? 0 : this.lostFor + dt;
+    if (this.lostFor > TUNE.lostGrace) this.target = NEUTRAL();
+
+    const ease = (key, tau) => {
+      const k = 1 - Math.exp(-dt / tau);
+      this.smooth[key] += (this.target[key] - this.smooth[key]) * k;
+    };
+    const slow = this.lostFor > TUNE.lostGrace;
+    ease("wingAngle", slow ? TUNE.lostTau : TUNE.easeTau);
+    ease("spread", slow ? TUNE.lostTau : TUNE.easeTau);
+    ease("extension", slow ? TUNE.lostTau : TUNE.easeTau);
+    ease("tuck", slow ? TUNE.lostTau : TUNE.easeTau);
+    ease("glide", slow ? TUNE.lostTau : TUNE.easeTau);
+    ease("steer", slow ? TUNE.lostTau : TUNE.steerTau);
+
+    const m = this.measured;
+    const lost = this.lostFor > TUNE.lostGrace;
+    this.out = {
+      tracked: !!m && !lost,
+      visible: !!m && !lost && m.visibility >= TUNE.visibilityFloor,
+      wingAngle: this.smooth.wingAngle,
+      wingAngleL: m?.wingAngleL ?? 0,
+      wingAngleR: m?.wingAngleR ?? 0,
+      spread: this.smooth.spread,
+      extension: this.smooth.extension,
+      tuck: this.smooth.tuck,
+      glide: this.smooth.glide,
+      flapActivity: clamp(this.flapActivity, 0, 1),
+      flap,
+      steer: clamp(this.smooth.steer, -1, 1),
+      hint: lost ? "no body detected" : (this.hint ?? ""),
+    };
+    return this.out;
+  }
+
+  /** Runs once per camera frame. Sets `this.target`; returns a flap event or null. */
+  #analyse(result, dt) {
     const m = measure(result.world, result.landmarks, this.cal.armLen);
+    this.measured = m;
     if (!m) {
-      this.out = { ...this.#blank(), flapActivity: this.flapActivity };
-      return this.out;
+      this.hint = "no body detected";
+      return null;
     }
 
     const visible = m.visibility >= TUNE.visibilityFloor;
@@ -306,25 +379,13 @@ export class GestureReader {
     const mag = invLerp(TUNE.steerDeadzone, 1, Math.abs(steerRaw));
     const steer = this.fSteer.filter(sign * mag * mag * 0.55 + sign * mag * 0.45, dt);
 
-    let hint = "";
-    if (!visible) hint = "step back — full torso not visible";
-    else if (m.hipScreenY > 0.97) hint = "step back — hips out of frame";
+    this.hint = !visible
+      ? "step back — full torso not visible"
+      : m.hipScreenY > 0.97
+        ? "step back — hips out of frame"
+        : "";
 
-    this.out = {
-      tracked: true,
-      visible,
-      wingAngle,
-      wingAngleL: m.wingAngleL,
-      wingAngleR: m.wingAngleR,
-      spread,
-      extension,
-      tuck,
-      glide,
-      flapActivity: clamp(this.flapActivity, 0, 1),
-      flap,
-      steer: clamp(steer, -1, 1),
-      hint,
-    };
-    return this.out;
+    this.target = { wingAngle, spread, extension, tuck, glide, steer: clamp(steer, -1, 1) };
+    return flap;
   }
 }

@@ -67,9 +67,10 @@ export class PoseTracker {
 
   async startCamera(deviceId) {
     this.stopCamera();
-    const video = deviceId
-      ? { deviceId: { exact: deviceId }, width: { ideal: 960 }, height: { ideal: 720 } }
-      : { facingMode: "user", width: { ideal: 960 }, height: { ideal: 720 } };
+    // 60fps where the webcam offers it: every extra frame is an extra pose sample,
+    // and tracking responsiveness is bounded by the camera, not by the renderer.
+    const size = { width: { ideal: 960 }, height: { ideal: 720 }, frameRate: { ideal: 60 } };
+    const video = deviceId ? { deviceId: { exact: deviceId }, ...size } : { facingMode: "user", ...size };
 
     this.stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
     this.video.srcObject = this.stream;
