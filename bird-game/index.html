@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Thermal — camera-tracked bird flight</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="hud" class="hud" hidden>
+      <div class="hud-top">
+        <div class="stat stat-score">
+          <span class="stat-value" id="score">0</span>
+          <span class="stat-label">score</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="distance">0<em>m</em></span>
+          <span class="stat-label">distance</span>
+        </div>
+        <div class="combo" id="combo" hidden><span id="combo-value">2</span>× chain</div>
+      </div>
+
+      <div class="hud-left">
+        <div class="gauge">
+          <div class="gauge-label">stamina</div>
+          <div class="gauge-track"><div class="gauge-fill gauge-stamina" id="stamina-fill"></div></div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-label">airspeed</div>
+          <div class="gauge-track"><div class="gauge-fill gauge-speed" id="speed-fill"></div></div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-label">altitude</div>
+          <div class="gauge-track"><div class="gauge-fill gauge-alt" id="alt-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="hud-modes">
+        <div class="mode" id="mode-flap"><b>FLAP</b><span>arms beating</span></div>
+        <div class="mode" id="mode-glide"><b>GLIDE</b><span>arms straight out</span></div>
+        <div class="mode" id="mode-dive"><b>DIVE</b><span>arms tucked in</span></div>
+      </div>
+
+    </div>
+
+    <div class="cam" id="cam" hidden>
+      <video id="cam-video" playsinline muted></video>
+      <canvas id="cam-overlay" width="320" height="240"></canvas>
+      <div class="cam-tilt"><div class="cam-tilt-needle" id="tilt-needle"></div></div>
+      <div class="cam-warning" id="cam-warning" hidden>step back — full torso not visible</div>
+    </div>
+
+    <div id="screen" class="screen">
+      <div class="screen-card" id="screen-card">
+        <h1 class="title">Thermal</h1>
+        <p class="subtitle">Your arms are the wings. Fly the canyon.</p>
+
+        <div class="moves">
+          <div class="move">
+            <div class="move-art" data-art="flap"></div>
+            <b>Flap</b>
+            <span>Beat your arms up and down to climb. Costs stamina.</span>
+          </div>
+          <div class="move">
+            <div class="move-art" data-art="glide"></div>
+            <b>Glide</b>
+            <span>Hold your arms straight out. Recovers stamina, rides thermals.</span>
+          </div>
+          <div class="move">
+            <div class="move-art" data-art="dive"></div>
+            <b>Dive</b>
+            <span>Tuck your arms to your sides to drop and pick up speed.</span>
+          </div>
+          <div class="move">
+            <div class="move-art" data-art="tilt"></div>
+            <b>Steer</b>
+            <span>Lean and drop a shoulder — the bird banks with you.</span>
+          </div>
+        </div>
+
+        <p class="status" id="status">Loading pose model…</p>
+        <button class="btn" id="primary-btn" disabled>Loading…</button>
+        <select class="picker" id="cam-picker" hidden></select>
+        <p class="footnote">Needs a webcam. Stand back far enough that your hips and both hands stay in frame.</p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

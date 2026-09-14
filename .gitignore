@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+dist/
+
+# Downloaded at setup time: setup.ps1 and bird-game/scripts/copy-assets.mjs
+# both fetch the pose model, so it never needs to live in the repo.
+models/*.task
+bird-game/public/models/
+bird-game/public/wasm/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
