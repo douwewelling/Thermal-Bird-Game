@@ -1,20 +1,21 @@
-# Python
+# De repo is bewust één bestand: index.html. Wat hieronder staat blijft lokaal.
+#
+# Het Python-prototype waar dit project mee begon en de oude, in modules
+# opgesplitste versie van het spel staan nog in de git-geschiedenis (commit
+# 2b576d6). Terughalen kan met:
+#     git checkout 2b576d6 -- bird-game/
+
+bird-game/
+body_tracker.py
+demo.py
+requirements.txt
+setup.ps1
+models/
+
 .venv/
 __pycache__/
 *.py[cod]
 
-# Node
-node_modules/
-dist/
-
-# Downloaded at setup time: setup.ps1 and bird-game/scripts/copy-assets.mjs
-# both fetch the pose model, so it never needs to live in the repo.
-models/*.task
-bird-game/public/models/
-bird-game/public/wasm/
-
-# Editor / OS
+.claude/
 .DS_Store
 Thumbs.db
-.vscode/
-.idea/

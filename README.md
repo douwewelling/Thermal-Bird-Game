@@ -1,139 +1,69 @@
-# Camera Tracker (lichaamsgewrichten)
+# Thermal
 
-> **Het spel staat in [`bird-game/`](bird-game/README.md)** — "Thermal", een 3D
-> vogelspel waarin je armen de vleugels zijn. Dat draait volledig in de browser
-> (three.js + MediaPipe voor JavaScript) en gebruikt dit Python-script niet;
-> het doet zijn eigen tracking met hetzelfde modelbestand uit `models/`.
-> Start het met `cd bird-game && npm install && npm run dev`.
+Browserspel waarin je armen de vleugels zijn: een webcam volgt je lichaam en je
+vliegt een eindeloze canyon door.
 
-## Spelen zonder iets te installeren
+**Spelen: [douwewelling.github.io/Thermal-Bird-Game](https://douwewelling.github.io/Thermal-Bird-Game/)**
 
-**[douwewelling.github.io/Thermal-Bird-Game](https://douwewelling.github.io/Thermal-Bird-Game/)**
+Je hebt een webcam nodig en genoeg ruimte om je armen te spreiden. Het beeld
+blijft in je browser — er gaat geen enkel camerabeeld het netwerk op.
 
-Draait op `https`, dus de camera werkt gewoon. Je hebt een webcam en wat ruimte
-nodig om je armen te spreiden.
+## Besturing
+
+| Wat je doet | Wat de vogel doet |
+|---|---|
+| Armen op en neer slaan | Klappen en klimmen. Kost conditie. |
+| Armen recht opzij houden | Zweven. Conditie loopt terug en je pakt thermiek. |
+| Armen tegen je lichaam | Duiken: je valt en wint snelheid. |
+| Schouder laten zakken, overhellen | Bochten maken. |
+
+Hoe voller je slag, hoe meer lift: een trage, grote slag tilt je verder dan
+snel wapperen. Vlieg door de ringen om je score te vermenigvuldigen.
+
+Geen webcam? Zet `?keys` achter de URL: spatie = klappen, shift = duiken,
+A/D = sturen.
 
 ## Zelf draaien
 
-```bash
-git clone https://github.com/douwewelling/Thermal-Bird-Game.git
-cd Thermal-Bird-Game/bird-game
-npm install
-npm run dev
-```
-
-Open daarna de **localhost**-URL die Vite print (niet je netwerk-IP: browsers
-geven alleen camera-toegang op `https://` of `localhost`). `npm install` haalt
-de MediaPipe-runtime en het pose-model binnen, dus daarna draait het spel
-volledig offline — er gaat geen enkel camerabeeld het netwerk op.
-
-Zonder webcam spelen kan met `?keys` achter de URL: spatie = klappen,
-shift = duiken, A/D = sturen.
-
-Real-time tracking van armen en torso (polsen, ellebogen, schouders, heupen)
-via een webcam, met [MediaPipe PoseLandmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker).
-Ontworpen als bouwsteen voor een motion-tracking spel.
-
-## Installatie
-
-**Optie A — automatisch (aanbevolen):**
+Eén bestand, geen buildstap. Je kunt het niet met een dubbelklik openen — de
+browser geeft alleen camera-toegang op `https://` of `localhost` — dus serveer
+het lokaal:
 
 ```bash
-.\setup.ps1
+npx serve
 ```
 
-Dit script zoekt een werkende Python-installatie, maakt een eigen virtuele
-omgeving (`.venv`) aan zodat dependencies nooit botsen met andere projecten,
-installeert de packages, controleert/downloadt het model, en test meteen
-of de camera werkt. Start daarna de demo met `.\.venv\Scripts\python.exe demo.py`.
+Open daarna de `localhost`-URL die er verschijnt.
 
-**Optie B — handmatig:**
+## Hoe het werkt
 
-```bash
-pip install -r requirements.txt
-```
+Alles zit in [`index.html`](index.html). Drie bibliotheken worden van een CDN
+geladen: three.js voor de 3D, MediaPipe PoseLandmarker voor de tracking, en het
+pose-model zelf.
 
-Het model (`models/pose_landmarker_lite.task`) zit niet in de repo — het is
-5,5 MB en wordt automatisch opgehaald door `setup.ps1` (Python) en door
-`npm install` in `bird-game/`. Handmatig downloaden kan ook:
+**Van lichaam naar besturing.** MediaPipe levert 3D-punten voor schouders,
+ellebogen, polsen en heupen. Die worden omgerekend naar een assenstelsel dat aan
+je romp vastzit, zodat draaien of scheef staan de metingen niet verpest. Een
+klap is een neerwaartse slag gemeten vanaf je eigen hoogste punt, niet vanaf de
+horizon — veel mensen klappen volledig onder schouderhoogte en zouden met een
+vaste drempel nooit van de grond komen.
 
-```bash
-curl -o models/pose_landmarker_lite.task https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task
-```
+**Framerate doet er niet toe.** De camera levert trager dan het scherm tekent,
+dus de tracker geeft tussendoor hetzelfde resultaat terug. Dat opnieuw filteren
+liet dezelfde armbeweging als 0,64 tellen bij 30 fps en als 1,07 bij 120 fps.
+Nu wordt er alleen op nieuwe beelden gemeten en schuift de uitvoer elk frame
+soepel mee. De physics loopt op een vaste stap van 1/120 s, zodat een duik
+overal hetzelfde voelt en niet door een rotspunt heen schiet.
 
-## Meenemen naar een ander project
+**Uit beeld lopen pauzeert.** Korte haperingen worden opgevangen door naar een
+neutrale glijvlucht te zakken; pas echte afwezigheid zet het spel stil, en bij
+terugkomst krijg je een aftelling.
 
-Deze map is volledig zelfstandig — kopieer 'm in zijn geheel (inclusief de
-`models`-map) naar een ander project of een andere machine. Zorg dat je
-meeneemt:
-
-- `body_tracker.py`, `demo.py`, `requirements.txt`, `setup.ps1`
-- `models/pose_landmarker_lite.task` (5,5 MB — of laat `setup.ps1` 'm downloaden)
-
-Op de nieuwe plek volstaat `.\setup.ps1` om alles werkend te krijgen, ook
-als Python daar nog niet (goed) geinstalleerd is. Dat voorkomt het
-PATH-gedoe van vandaag: het script zoekt zelf een echte Python-installatie
-(niet de Microsoft Store-alias) en gebruikt een eigen `.venv`, zodat een
-nieuwe Claude-sessie er ook zonder handmatig PATH-gefriemel mee uit de voeten kan.
-
-## Demo draaien
-
-```bash
-python demo.py
-```
-
-Toont je webcambeeld met het skelet erover heen, een FPS-teller, en een
-voorbeeld-trigger die telt hoe vaak je beide handen boven je schouders tilt.
-`q` = stoppen, `r` = teller resetten.
-
-## API voor je eigen spel
-
-```python
-from body_tracker import BodyTracker, draw_skeleton
-
-tracker = BodyTracker(camera_index=0)
-tracker.start()
-
-while True:
-    frame, joints = tracker.read()   # joints: dict[str, Joint] of None
-    if frame is None:
-        break
-
-    if joints:
-        pols_links = joints["LEFT_WRIST"]
-        print(pols_links.x, pols_links.y, pols_links.visibility)
-
-    draw_skeleton(frame, joints)     # optioneel, voor visuele feedback
-    # ... hier komt jouw spellogica: botsingsdetectie, score, besturing ...
-
-tracker.stop()
-```
-
-Elk gewricht (`Joint`) heeft:
-- `x`, `y`, `z` — genormaliseerde positie (0..1), `z` is relatieve diepte
-- `px` — pixelcoordinaten `(x, y)` in het huidige frame, handig om direct
-  op het scherm te tekenen of botsingen mee te berekenen
-- `visibility` — 0..1, hoe zeker het model is dat het gewricht in beeld is
-  (gebruik een drempel zoals `> 0.5` om ruis te filteren)
-
-Beschikbare gewrichtsnamen (`TRACKED_JOINTS` in `body_tracker.py`):
-`LEFT_SHOULDER`, `RIGHT_SHOULDER`, `LEFT_ELBOW`, `RIGHT_ELBOW`,
-`LEFT_WRIST`, `RIGHT_WRIST`, `LEFT_HIP`, `RIGHT_HIP`.
-
-## Performance-opties
-
-- `model_complexity`/model-bestand: `pose_landmarker_lite.task` is het
-  snelste model. Voor meer nauwkeurigheid (ten koste van FPS) kun je
-  `pose_landmarker_full.task` of `pose_landmarker_heavy.task` downloaden
-  van dezelfde Google-storage-URL (vervang `_lite` door `_full`/`_heavy`)
-  en het pad doorgeven aan `BodyTracker(model_path=...)`.
-- `frame_width`/`frame_height`: lager zetten (bv. 640x480) geeft meer FPS
-  op een zwakkere laptop.
-- `min_detection_confidence`/`min_tracking_confidence`: verlagen maakt de
-  tracker gevoeliger maar instabieler; verhogen maakt hem stabieler maar
-  mist soms snelle bewegingen.
+**De cartoonstijl** komt zonder textures of post-processing: toon-shading in
+drie harde stappen, rotslagen die naar vaste kleurbanden worden afgerond, en
+contouren die ontstaan door elke vorm twee keer te tekenen — één keer opgeblazen
+langs zijn normalen in een donkere kleur.
 
 ## Licentie
 
-[MIT](LICENSE) — vrij te gebruiken, aan te passen en te verspreiden, mits de
-copyrightvermelding meegaat.
+[MIT](LICENSE)

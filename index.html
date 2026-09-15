@@ -1,0 +1,3311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Thermal — camera-tracked bird flight</title>
+    <style>
+      :root {
+        --ink: #1b0f2e;
+        --cream: #fff4e2;
+        --muted: rgba(255, 244, 226, 0.62);
+        --flap: #ffb347;
+        --glide: #49c6d8; /* the bird's own colour */
+        --dive: #ff6b6b;
+        --panel: rgba(30, 14, 44, 0.62);
+        --stroke: rgba(255, 244, 226, 0.22);
+        --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+        --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--ink);
+        color: var(--cream);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      #scene {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      /* ---------- HUD ---------- */
+
+      .hud {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        padding: 22px 26px;
+        animation: fade-in 0.6s ease both;
+      }
+
+      .hud[hidden] {
+        display: none !important;
+      }
+
+      .hud-top {
+        position: absolute;
+        top: 22px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 40px;
+        align-items: flex-start;
+      }
+
+      .stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+      }
+
+      .stat-value {
+        font-family: var(--mono);
+        font-size: 30px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .stat-score .stat-value {
+        font-size: 44px;
+        color: var(--flap);
+      }
+
+      .stat-value em {
+        font-style: normal;
+        font-size: 0.5em;
+        color: var(--muted);
+        margin-left: 2px;
+      }
+
+      .stat-label {
+        margin-top: 6px;
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .combo {
+        position: absolute;
+        top: 74px;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--glide);
+        text-shadow: 0 0 18px rgba(73, 198, 216, 0.6);
+      }
+
+      .combo[hidden] {
+        display: none;
+      }
+
+      .hud-left {
+        position: absolute;
+        left: 26px;
+        bottom: 26px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        width: 180px;
+      }
+
+      .gauge-label {
+        font-size: 9px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 5px;
+      }
+
+      .gauge-track {
+        height: 5px;
+        border-radius: 3px;
+        background: rgba(255, 244, 226, 0.16);
+        overflow: hidden;
+      }
+
+      .gauge-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 3px;
+        transition: width 0.08s linear;
+      }
+
+      .gauge-stamina {
+        background: linear-gradient(90deg, #ff7a3d, var(--flap));
+        box-shadow: 0 0 14px rgba(255, 179, 71, 0.5);
+      }
+
+      .gauge-stamina.low {
+        background: linear-gradient(90deg, #c2352f, var(--dive));
+        box-shadow: 0 0 14px rgba(255, 107, 107, 0.6);
+      }
+
+      .gauge-speed {
+        background: linear-gradient(90deg, rgba(255, 244, 226, 0.5), var(--cream));
+      }
+
+      .gauge-alt {
+        background: linear-gradient(90deg, rgba(73, 198, 216, 0.45), var(--glide));
+      }
+
+      .hud-modes {
+        position: absolute;
+        right: 26px;
+        bottom: 26px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-end;
+      }
+
+      .mode {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        padding: 8px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--stroke);
+        background: var(--panel);
+        backdrop-filter: blur(10px);
+        opacity: 0.35;
+        transition: opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+      }
+
+      .mode b {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.18em;
+      }
+
+      .mode span {
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      .mode.active {
+        opacity: 1;
+      }
+
+      #mode-flap.active {
+        border-color: var(--flap);
+        box-shadow: 0 0 22px rgba(255, 179, 71, 0.3);
+      }
+      #mode-flap.active b {
+        color: var(--flap);
+      }
+      #mode-glide.active {
+        border-color: var(--glide);
+        box-shadow: 0 0 22px rgba(73, 198, 216, 0.35);
+      }
+      #mode-glide.active b {
+        color: var(--glide);
+      }
+      #mode-dive.active {
+        border-color: var(--dive);
+        box-shadow: 0 0 22px rgba(255, 107, 107, 0.3);
+      }
+      #mode-dive.active b {
+        color: var(--dive);
+      }
+
+      /* ---------- camera inset ---------- */
+
+      /* sits above the menu backdrop: you need to see yourself while calibrating */
+      .cam {
+        position: fixed;
+        z-index: 20;
+        top: 22px;
+        right: 26px;
+        width: 200px;
+        height: 150px;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid var(--stroke);
+        background: #000;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+      }
+
+      .cam video,
+      .cam canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transform: scaleX(-1);
+      }
+
+      .cam video {
+        opacity: 0.55;
+        filter: grayscale(0.5) contrast(1.1);
+      }
+
+      .cam-tilt {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 3px;
+        background: rgba(255, 244, 226, 0.18);
+      }
+
+      .cam-tilt-needle {
+        position: absolute;
+        left: 50%;
+        top: -1px;
+        width: 34px;
+        height: 5px;
+        margin-left: -17px;
+        border-radius: 3px;
+        background: var(--cream);
+        transition: transform 0.06s linear;
+      }
+
+      .cam-warning {
+        position: absolute;
+        inset: auto 0 0 0;
+        padding: 6px 8px 9px;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-align: center;
+        background: linear-gradient(transparent, rgba(194, 53, 47, 0.92));
+        color: #fff;
+      }
+
+      .cam-warning[hidden],
+      .cam[hidden] {
+        display: none;
+      }
+
+      /* ---------- screens ---------- */
+
+      .screen {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: radial-gradient(110% 80% at 50% 100%, rgba(255, 138, 92, 0.22), transparent 62%),
+          radial-gradient(120% 90% at 50% 0%, rgba(120, 60, 160, 0.3), transparent 60%),
+          rgba(20, 10, 32, 0.76);
+        backdrop-filter: blur(14px);
+        z-index: 10;
+        transition: opacity 0.35s ease;
+      }
+
+      .screen[hidden] {
+        display: none;
+      }
+
+      .screen.leaving {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .screen-card {
+        width: min(760px, 100%);
+        max-height: 100%;
+        overflow-y: auto;
+        text-align: center;
+        animation: rise 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+      }
+
+      .title {
+        margin: 0;
+        font-size: clamp(48px, 9vw, 92px);
+        font-weight: 200;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        background: linear-gradient(180deg, #fff2dd, #ff9a4d 70%, #e2562f);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .subtitle {
+        margin: 4px 0 34px;
+        font-size: 15px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .moves {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 34px;
+        text-align: left;
+      }
+
+      @media (max-width: 680px) {
+        .moves {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .move {
+        padding: 14px;
+        border-radius: 16px;
+        border: 1px solid var(--stroke);
+        background: rgba(255, 244, 226, 0.05);
+      }
+
+      .move b {
+        display: block;
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        margin-bottom: 4px;
+      }
+
+      .move span {
+        font-size: 11px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      .move-art {
+        height: 52px;
+        margin-bottom: 10px;
+        opacity: 0.9;
+      }
+
+      .move-art svg {
+        height: 100%;
+        width: auto;
+        display: block;
+        margin: 0 auto;
+      }
+
+      .status {
+        min-height: 20px;
+        margin: 0 0 18px;
+        font-size: 13px;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+
+      .status.warn {
+        color: var(--flap);
+      }
+
+      .status.error {
+        color: var(--dive);
+      }
+
+      .btn {
+        pointer-events: auto;
+        appearance: none;
+        border: 0;
+        cursor: pointer;
+        padding: 15px 44px;
+        border-radius: 999px;
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #2a1206;
+        background: linear-gradient(180deg, #ffc772, #ff8a3c);
+        box-shadow: 0 10px 34px rgba(255, 138, 60, 0.35);
+        transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.2s;
+      }
+
+      .btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 16px 40px rgba(255, 138, 60, 0.45);
+      }
+
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: default;
+        box-shadow: none;
+      }
+
+      .footnote {
+        margin: 20px 0 0;
+        font-size: 11px;
+        color: rgba(255, 244, 226, 0.36);
+      }
+
+      .picker {
+        pointer-events: auto;
+        display: block;
+        margin: 18px auto 0;
+        padding: 9px 14px;
+        max-width: 320px;
+        border-radius: 999px;
+        border: 1px solid var(--stroke);
+        background: rgba(12, 9, 16, 0.9);
+        color: var(--cream);
+        font-family: var(--sans);
+        font-size: 12px;
+      }
+
+      .picker[hidden] {
+        display: none;
+      }
+
+      .linkish {
+        pointer-events: auto;
+        appearance: none;
+        border: 0;
+        background: none;
+        padding: 0;
+        cursor: pointer;
+        font: inherit;
+        color: var(--glide);
+        text-decoration: underline;
+      }
+
+      /* calibration ring */
+
+      .calibrate {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 22px;
+      }
+
+      .calibrate-ring {
+        width: 168px;
+        height: 168px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: conic-gradient(var(--flap) 0%, rgba(255, 244, 226, 0.14) 0);
+      }
+
+      .calibrate-ring::after {
+        content: "";
+        width: 152px;
+        height: 152px;
+        border-radius: 50%;
+        background: #14101b;
+        grid-area: 1 / 1;
+      }
+
+      .calibrate-ring span {
+        grid-area: 1 / 1;
+        z-index: 1;
+        font-family: var(--mono);
+        font-size: 40px;
+        font-weight: 300;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .score-final {
+        font-family: var(--mono);
+        font-size: 76px;
+        font-weight: 300;
+        color: var(--flap);
+        line-height: 1;
+        margin: 10px 0 6px;
+      }
+
+      .score-rows {
+        display: flex;
+        justify-content: center;
+        gap: 34px;
+        margin-bottom: 30px;
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .score-rows b {
+        display: block;
+        font-size: 22px;
+        font-weight: 400;
+        color: var(--cream);
+        margin-bottom: 3px;
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(18px);
+        }
+      }
+
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+
+    <canvas id="scene"></canvas>
+
+    <div id="hud" class="hud" hidden>
+      <div class="hud-top">
+        <div class="stat stat-score">
+          <span class="stat-value" id="score">0</span>
+          <span class="stat-label">score</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="distance">0<em>m</em></span>
+          <span class="stat-label">distance</span>
+        </div>
+        <div class="combo" id="combo" hidden><span id="combo-value">2</span>× chain</div>
+      </div>
+
+      <div class="hud-left">
+        <div class="gauge">
+          <div class="gauge-label">stamina</div>
+          <div class="gauge-track"><div class="gauge-fill gauge-stamina" id="stamina-fill"></div></div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-label">airspeed</div>
+          <div class="gauge-track"><div class="gauge-fill gauge-speed" id="speed-fill"></div></div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-label">altitude</div>
+          <div class="gauge-track"><div class="gauge-fill gauge-alt" id="alt-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="hud-modes">
+        <div class="mode" id="mode-flap"><b>FLAP</b><span>arms beating</span></div>
+        <div class="mode" id="mode-glide"><b>GLIDE</b><span>arms straight out</span></div>
+        <div class="mode" id="mode-dive"><b>DIVE</b><span>arms tucked in</span></div>
+      </div>
+
+    </div>
+
+    <div class="cam" id="cam" hidden>
+      <video id="cam-video" playsinline muted></video>
+      <canvas id="cam-overlay" width="320" height="240"></canvas>
+      <div class="cam-tilt"><div class="cam-tilt-needle" id="tilt-needle"></div></div>
+      <div class="cam-warning" id="cam-warning" hidden>step back — full torso not visible</div>
+    </div>
+
+    <div id="screen" class="screen">
+      <div class="screen-card" id="screen-card">
+        <h1 class="title">Thermal</h1>
+        <p class="subtitle">Your arms are the wings. Fly the canyon.</p>
+
+        <div class="moves">
+          <div class="move">
+            <div class="move-art" data-art="flap"></div>
+            <b>Flap</b>
+            <span>Beat your arms up and down to climb. Costs stamina.</span>
+          </div>
+          <div class="move">
+            <div class="move-art" data-art="glide"></div>
+            <b>Glide</b>
+            <span>Hold your arms straight out. Recovers stamina, rides thermals.</span>
+          </div>
+          <div class="move">
+            <div class="move-art" data-art="dive"></div>
+            <b>Dive</b>
+            <span>Tuck your arms to your sides to drop and pick up speed.</span>
+          </div>
+          <div class="move">
+            <div class="move-art" data-art="tilt"></div>
+            <b>Steer</b>
+            <span>Lean and drop a shoulder — the bird banks with you.</span>
+          </div>
+        </div>
+
+        <p class="status" id="status">Loading pose model…</p>
+        <button class="btn" id="primary-btn" disabled>Loading…</button>
+        <select class="picker" id="cam-picker" hidden></select>
+        <p class="footnote">Needs a webcam. Stand back far enough that your hips and both hands stay in frame.</p>
+      </div>
+    </div>
+
+    <script type="module">
+      import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
+      import {
+        FilesetResolver,
+        PoseLandmarker,
+      } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs";
+
+      /* ==========================================================================
+       * Scene, sky, lighting, chase camera
+       * ========================================================================== */
+      const PALETTE = {
+        zenith: new THREE.Color(0x4b2d7f),
+        upper: new THREE.Color(0xc4508f),
+        mid: new THREE.Color(0xff8a5c),
+        horizon: new THREE.Color(0xffc46b),
+        sun: new THREE.Color(0xfff4c9),
+        glow: new THREE.Color(0xffd98a),
+        haze: new THREE.Color(0xf2915e),
+      };
+
+      /**
+       * Three hard lighting steps instead of a smooth ramp. This is what makes
+       * everything read as drawn rather than rendered.
+       */
+      function toonGradient(steps = 3) {
+        const data = new Uint8Array(steps);
+        for (let i = 0; i < steps; i++) data[i] = Math.round(((i + 1) / steps) * 255);
+        const tex = new THREE.DataTexture(data, steps, 1, THREE.RedFormat);
+        tex.minFilter = THREE.NearestFilter;
+        tex.magFilter = THREE.NearestFilter;
+        tex.generateMipmaps = false;
+        tex.needsUpdate = true;
+        return tex;
+      }
+
+      const TOON = toonGradient(3);
+
+      const SKY_VERT = /* glsl */ `
+        varying vec3 vDir;
+        void main() {
+          vDir = normalize(position);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `;
+
+      // banded rather than blended, and the sun is a hard disc — a painted backdrop
+      const SKY_FRAG = /* glsl */ `
+        varying vec3 vDir;
+        uniform vec3 uZenith, uUpper, uMid, uHorizon, uSun, uGlow, uSunDir;
+        void main() {
+          vec3 dir = normalize(vDir);
+          float h = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+
+          vec3 col = uHorizon;
+          col = mix(col, uMid, smoothstep(0.502, 0.533, h));
+          col = mix(col, uUpper, smoothstep(0.583, 0.612, h));
+          col = mix(col, uZenith, smoothstep(0.705, 0.745, h));
+
+          float d = dot(dir, normalize(uSunDir));
+          col += uGlow * pow(max(d, 0.0), 5.0) * 0.30;
+          col = mix(col, uGlow, smoothstep(0.9880, 0.9905, d));
+          col = mix(col, uSun, smoothstep(0.9947, 0.9955, d));
+
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `;
+
+      const SUN_DIR = new THREE.Vector3(0.34, 0.17, -1).normalize();
+
+      function createScene(canvas) {
+        const renderer = new THREE.WebGLRenderer({
+          canvas,
+          antialias: true,
+          powerPreference: "high-performance",
+        });
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        // ACES desaturates the highlights into grey, which kills a flat cartoon palette
+        renderer.toneMapping = THREE.LinearToneMapping;
+        renderer.toneMappingExposure = 1;
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(PALETTE.haze.getHex(), 0.0021);
+
+        const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 4000);
+
+        /* ---- sky dome, parented to a group that follows the camera ---- */
+        const follow = new THREE.Group();
+        scene.add(follow);
+
+        const sky = new THREE.Mesh(
+          new THREE.SphereGeometry(2400, 32, 20),
+          new THREE.ShaderMaterial({
+            vertexShader: SKY_VERT,
+            fragmentShader: SKY_FRAG,
+            side: THREE.BackSide,
+            depthWrite: false,
+            fog: false,
+            uniforms: {
+              uZenith: { value: PALETTE.zenith },
+              uUpper: { value: PALETTE.upper },
+              uMid: { value: PALETTE.mid },
+              uHorizon: { value: PALETTE.horizon },
+              uSun: { value: PALETTE.sun },
+              uGlow: { value: PALETTE.glow },
+              uSunDir: { value: SUN_DIR },
+            },
+          }),
+        );
+        sky.renderOrder = -1;
+        follow.add(sky);
+        follow.add(buildDistantRidges());
+
+        /* ---- light: one strong key plus flat fill, so the toon steps stay readable ---- */
+        scene.add(new THREE.HemisphereLight(0xffd9ab, 0x53306b, 0.85));
+        const sun = new THREE.DirectionalLight(0xfff0c4, 1.5);
+        sun.position.copy(SUN_DIR).multiplyScalar(400);
+        scene.add(sun);
+        const rim = new THREE.DirectionalLight(0x8a6ee0, 0.7);
+        rim.position.set(-1, 0.55, 0.6).multiplyScalar(300);
+        scene.add(rim);
+
+        const dust = new Dust(scene);
+        const clouds = new Clouds(scene);
+
+        const resize = () => {
+          const w = innerWidth;
+          const h = innerHeight;
+          renderer.setSize(w, h, false);
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+        };
+        resize();
+        addEventListener("resize", resize);
+
+        return { renderer, scene, camera, follow, dust, clouds };
+      }
+
+      /**
+       * Flat silhouetted mesas far beyond the canyon walls; they never get closer.
+       * Unlit on purpose — a cut-paper backdrop behind the lit world.
+       */
+      function buildDistantRidges() {
+        const group = new THREE.Group();
+        const pos = [];
+        const col = [];
+        // each layer is one solid colour, like stacked paper cut-outs
+        const layers = [
+          { radius: 820, height: 190, color: new THREE.Color(0x8b3f6e) },
+          { radius: 1180, height: 300, color: new THREE.Color(0xa8527e) },
+          { radius: 1620, height: 430, color: new THREE.Color(0xc2688c) },
+        ];
+
+        layers.forEach((layer, li) => {
+          const count = 30 + li * 9;
+          for (let i = 0; i < count; i++) {
+            const a0 = (i / count) * Math.PI * 2;
+            const a1 = ((i + 1.35) / count) * Math.PI * 2;
+            const mid = (a0 + a1) / 2;
+            const h = layer.height * (0.4 + Math.abs(Math.sin(i * 12.9898 + li * 4.1)) * 0.95);
+            const p = (a, y) =>
+              new THREE.Vector3(Math.cos(a) * layer.radius, y - 150, Math.sin(a) * layer.radius);
+            for (const v of [p(a0, 0), p(a1, 0), p(mid, h)]) {
+              pos.push(v.x, v.y, v.z);
+              col.push(layer.color.r, layer.color.g, layer.color.b);
+            }
+          }
+        });
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+        const mesh = new THREE.Mesh(
+          geo,
+          new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: false }),
+        );
+        mesh.renderOrder = -1;
+        group.add(mesh);
+        return group;
+      }
+
+      /** Puffy cartoon clouds built from overlapping blobs, wrapping around the bird. */
+      class Clouds {
+        constructor(scene, count = 16) {
+          this.span = new THREE.Vector3(520, 220, 900);
+          this.group = new THREE.Group();
+          scene.add(this.group);
+
+          const blob = new THREE.IcosahedronGeometry(1, 1);
+          const shades = [0xfff2f6, 0xffd9e6, 0xffc0d4];
+          this.puffs = [];
+
+          for (let i = 0; i < count; i++) {
+            const cloud = new THREE.Group();
+            const tint = shades[i % shades.length];
+            const lobes = 4 + Math.floor(Math.random() * 3);
+            for (let k = 0; k < lobes; k++) {
+              const m = new THREE.Mesh(
+                blob,
+                new THREE.MeshBasicMaterial({ color: tint, fog: true, transparent: true, opacity: 0.96 }),
+              );
+              const r = 7 + Math.random() * 9;
+              m.scale.set(r, r * (0.62 + Math.random() * 0.25), r * 0.85);
+              m.position.set((k - lobes / 2) * 9 + Math.random() * 4, Math.random() * 5, Math.random() * 6 - 3);
+              cloud.add(m);
+            }
+            cloud.position.set(
+              (Math.random() - 0.5) * this.span.x,
+              (Math.random() - 0.5) * this.span.y,
+              (Math.random() - 0.5) * this.span.z,
+            );
+            this.group.add(cloud);
+            this.puffs.push(cloud);
+          }
+        }
+
+        update(center) {
+          const wrap = (v, c, size) => {
+            let d = v - c;
+            if (d > size / 2) d -= size;
+            else if (d < -size / 2) d += size;
+            return c + d;
+          };
+          // clouds sit above the bird, not in its face
+          const high = center.y + 95;
+          for (const c of this.puffs) {
+            c.position.x = wrap(c.position.x, center.x, this.span.x);
+            c.position.y = wrap(c.position.y, high, this.span.y);
+            c.position.z = wrap(c.position.z, center.z, this.span.z);
+          }
+        }
+      }
+
+      const DUST_VERT = /* glsl */ `
+        uniform float uScale;
+        varying float vAlpha;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          float dist = max(-mv.z, 0.001);
+          gl_Position = projectionMatrix * mv;
+          gl_PointSize = clamp(uScale / dist, 1.0, 26.0);
+          // fade out close to the lens and again in the far haze
+          vAlpha = smoothstep(4.0, 18.0, dist) * (1.0 - smoothstep(95.0, 165.0, dist));
+        }
+      `;
+
+      const DUST_FRAG = /* glsl */ `
+        uniform vec3 uColor;
+        varying float vAlpha;
+        void main() {
+          float r = dot(gl_PointCoord - 0.5, gl_PointCoord - 0.5);
+          if (r > 0.25) discard;
+          float falloff = 1.0 - r * 4.0;
+          gl_FragColor = vec4(uColor, falloff * falloff * vAlpha * 0.6);
+        }
+      `;
+
+      /** Motes of dust that wrap around the bird — the main sense of speed. */
+      class Dust {
+        constructor(scene, count = 1600) {
+          this.box = new THREE.Vector3(240, 170, 320);
+          this.count = count;
+          this.worldSize = 0.42;
+
+          const pos = new Float32Array(count * 3);
+          for (let i = 0; i < count; i++) {
+            pos[i * 3] = (Math.random() - 0.5) * this.box.x;
+            pos[i * 3 + 1] = (Math.random() - 0.5) * this.box.y;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * this.box.z;
+          }
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+
+          this.material = new THREE.ShaderMaterial({
+            vertexShader: DUST_VERT,
+            fragmentShader: DUST_FRAG,
+            uniforms: { uScale: { value: 60 }, uColor: { value: new THREE.Color(0xffdcb0) } },
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+          });
+
+          this.points = new THREE.Points(geo, this.material);
+          this.points.frustumCulled = false;
+          scene.add(this.points);
+        }
+
+        update(center, camera, renderer) {
+          // point size in pixels = worldSize * viewportHeight / (2 * dist * tan(fov/2))
+          const h = renderer.domElement.height;
+          const fovRad = (camera.fov * Math.PI) / 180;
+          this.material.uniforms.uScale.value = (this.worldSize * h) / (2 * Math.tan(fovRad / 2));
+
+          const attr = this.points.geometry.attributes.position;
+          const a = attr.array;
+          const { x: bx, y: by, z: bz } = this.box;
+          // particles live in world space and wrap into a box that follows the bird
+          const wrap = (v, c, size) => {
+            let d = v - c;
+            if (d > size / 2) d -= size;
+            else if (d < -size / 2) d += size;
+            return c + d;
+          };
+          for (let i = 0; i < this.count; i++) {
+            a[i * 3] = wrap(a[i * 3], center.x, bx);
+            a[i * 3 + 1] = wrap(a[i * 3 + 1], center.y, by);
+            a[i * 3 + 2] = wrap(a[i * 3 + 2], center.z, bz);
+          }
+          attr.needsUpdate = true;
+        }
+      }
+
+      const UP = new THREE.Vector3(0, 1, 0);
+
+      /** Chase camera: sits behind and above, rolls a little into the turn. */
+      class ChaseCamera {
+        constructor(camera) {
+          this.camera = camera;
+          this.pos = new THREE.Vector3(0, 70, 30);
+          this.look = new THREE.Vector3();
+          this.up = new THREE.Vector3(0, 1, 0);
+          this.fov = 62;
+          this._desired = new THREE.Vector3();
+          this._dir = new THREE.Vector3();
+          this._scratch = new THREE.Vector3();
+          // Each flap is a velocity impulse. Aiming the camera straight down the raw
+          // velocity would jolt the whole view on every beat, so it follows a lagged
+          // copy of the flight direction instead.
+          this.aim = new THREE.Vector3(0, 0, -1);
+          this.shake = new THREE.Vector3();
+        }
+
+        reset(flight) {
+          this.aim.copy(flight.vel).normalize();
+          this.shake.set(0, 0, 0);
+          this.#desiredPosition(flight);
+          this.pos.copy(this._desired);
+          this.look.copy(flight.pos);
+        }
+
+        #desiredPosition(flight) {
+          const dir = this._dir.copy(this.aim);
+          const back = 17 + flight.speed * 0.16;
+          const up = 4.5 + Math.max(0, -dir.y) * 5;
+          this._desired
+            .copy(flight.pos)
+            .addScaledVector(dir, -back)
+            .addScaledVector(UP, up);
+          this._desired.add(this.shake);
+        }
+
+        update(dt, flight, speedNorm) {
+          // lag the aim behind the real heading; turns still read, flap jolts do not
+          this.aim.lerp(this._scratch.copy(flight.vel).normalize(), 1 - Math.exp(-dt * 6.5));
+          this.aim.normalize();
+
+          // drift the shake offset rather than resampling noise every frame, which at
+          // high framerates just looks like static
+          const amp = Math.max(0, speedNorm - 0.35) * 0.55;
+          this._scratch.set((Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp, 0);
+          this.shake.lerp(this._scratch, 1 - Math.exp(-dt * 9));
+
+          this.#desiredPosition(flight);
+          const k = 1 - Math.exp(-dt * 7.5);
+          this.pos.lerp(this._desired, k);
+
+          const dir = this._dir.copy(this.aim);
+          const target = this.look.copy(flight.pos).addScaledVector(dir, 22);
+
+          // rolling the camera into the bank is most of what sells a turn
+          this.up.set(0, 1, 0).applyAxisAngle(dir, flight.bank * 0.4);
+          this.camera.position.copy(this.pos);
+          this.camera.up.copy(this.up);
+          this.camera.lookAt(target);
+
+          const targetFov = 60 + speedNorm * 22;
+          this.fov += (targetFov - this.fov) * (1 - Math.exp(-dt * 4));
+          this.camera.fov = this.fov;
+          this.camera.updateProjectionMatrix();
+        }
+      }
+
+      /* ==========================================================================
+       * The canyon: field functions, mesh streaming, collision
+       * ========================================================================== */
+      const CANYON = {
+        chunkLength: 240,
+        chunkCount: 7,
+        step: 8, // z resolution of the wall mesh
+        wallLevels: 7,
+        wallHeight: 165,
+        ceilingFraction: 0.62, // of the wall height — keeps play down inside the canyon
+        clearance: 2.4, // how close the bird may get before it counts as a hit
+      };
+
+      /* ---------- deterministic field functions (no allocation, no state) ---------- */
+
+      const hash = (x, y) => {
+        const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        return n - Math.floor(n);
+      };
+
+      const noise = (x, y) => {
+        const xi = Math.floor(x);
+        const yi = Math.floor(y);
+        const xf = x - xi;
+        const yf = y - yi;
+        const u = xf * xf * (3 - 2 * xf);
+        const v = yf * yf * (3 - 2 * yf);
+        const a = hash(xi, yi);
+        const b = hash(xi + 1, yi);
+        const c = hash(xi, yi + 1);
+        const d = hash(xi + 1, yi + 1);
+        return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
+      };
+
+      /** Distance flown, in metres. The bird travels toward -Z, so this is positive. */
+      const distanceOf = (z) => -z;
+
+      const centerX = (d) =>
+        36 * Math.sin(d * 0.0061) + 20 * Math.sin(d * 0.0142 + 1.7) + 8 * Math.sin(d * 0.0309 + 0.4);
+
+      const floorY = (d) =>
+        11 * Math.sin(d * 0.0087 + 2.2) + 6 * Math.sin(d * 0.0191 + 0.9) + 3 * Math.sin(d * 0.047);
+
+      /** Canyon narrows as you get further out — that is the difficulty curve. */
+      const halfWidth = (d) => {
+        const tighten = Math.min(d / 7000, 1);
+        const base = 54 - 22 * tighten;
+        return base + 9 * Math.sin(d * 0.0113 + 3.1) + 4 * Math.sin(d * 0.026 + 1.2);
+      };
+
+      /* ---------- spires and thermals, placed on a deterministic lattice ---------- */
+
+      const SPIRE_SPACING = 155;
+      const THERMAL_SPACING = 340;
+
+      function spireAt(index) {
+        const d = index * SPIRE_SPACING + 60;
+        if (d < 700) return null; // give the player a calm opening stretch
+        const r = hash(index * 7.3, 19.1);
+        if (r > 0.72) return null;
+        const w = halfWidth(d);
+        const lateral = (hash(index * 3.1, 5.7) * 1.7 - 0.85) * w;
+        return {
+          d,
+          x: centerX(d) + lateral,
+          z: -d,
+          radius: 5 + hash(index * 11.7, 2.3) * 5,
+          base: floorY(d) - 4,
+          height: 42 + hash(index * 2.9, 31.4) * 70,
+        };
+      }
+
+      function thermalAt(index) {
+        const d = index * THERMAL_SPACING + 220;
+        const w = halfWidth(d);
+        return {
+          d,
+          x: centerX(d) + (hash(index * 13.7, 8.2) * 1.2 - 0.6) * w,
+          y: floorY(d) + 30,
+          z: -d,
+          radius: 17,
+          strength: 15,
+        };
+      }
+
+      /* ---------- mesh building ---------- */
+
+      // four bold bands from shaded base to sunlit rim, rather than a smooth ramp
+      const COLOR = {
+        shadow: new THREE.Color(0x532a6b),
+        rock: new THREE.Color(0xa8414f),
+        warm: new THREE.Color(0xdf6b36),
+        rim: new THREE.Color(0xf2a049),
+        cap: new THREE.Color(0xffc46b),
+        sand: new THREE.Color(0xeda85f),
+        sandDark: new THREE.Color(0xa85a36),
+      };
+
+      class MeshBuilder {
+        constructor() {
+          this.pos = [];
+          this.col = [];
+        }
+        tri(a, b, c, ca, cb, cc) {
+          this.pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+          this.col.push(ca.r, ca.g, ca.b, cb.r, cb.g, cb.b, cc.r, cc.g, cc.b);
+        }
+        quad(a, b, c, d, ca, cb, cc, cd) {
+          this.tri(a, b, c, ca, cb, cc);
+          this.tri(a, c, d, ca, cc, cd);
+        }
+        build() {
+          const g = new THREE.BufferGeometry();
+          g.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
+          g.setAttribute("color", new THREE.Float32BufferAttribute(this.col, 3));
+          g.computeVertexNormals();
+          return g;
+        }
+      }
+
+      /**
+       * Quantised into flat strata. Snapping `t` to a handful of steps is what gives
+       * the walls their drawn, banded look instead of an airbrushed gradient.
+       */
+      const BANDS = 7;
+      const wallColor = (t, shade) => {
+        const q = Math.round(t * BANDS) / BANDS;
+        const c = new THREE.Color();
+        if (q < 0.42) c.copy(COLOR.shadow).lerp(COLOR.rock, q / 0.42);
+        else if (q < 0.72) c.copy(COLOR.rock).lerp(COLOR.warm, (q - 0.42) / 0.3);
+        else if (q < 0.93) c.copy(COLOR.warm).lerp(COLOR.rim, (q - 0.72) / 0.21);
+        else c.copy(COLOR.rim).lerp(COLOR.cap, (q - 0.93) / 0.07);
+        return c.multiplyScalar(shade);
+      };
+
+      /** Wall surfaces bulge in and out. `t` is height up the wall, 0..1. */
+      const wallBulge = (d, t) => noise(d * 0.021, t * 3.4) * 9 - 4.5 + noise(d * 0.07, t * 8) * 3;
+
+      const heightToT = (d, y) => {
+        const raw = (y - floorY(d)) / CANYON.wallHeight;
+        return raw <= 0 ? 0 : Math.min(Math.pow(raw, 1 / 1.15), 1);
+      };
+
+      /**
+       * Half-width of the gap at a given height — the same surface the mesh draws,
+       * so what the player sees is what they hit.
+       */
+      const gapAt = (d, y) => {
+        const t = heightToT(d, y);
+        return halfWidth(d) + Math.pow(t, 1.6) * 16 + wallBulge(d, t) * (0.25 + t);
+      };
+
+      function buildChunk(startD) {
+        const mb = new MeshBuilder();
+        const steps = Math.round(CANYON.chunkLength / CANYON.step);
+        const levels = CANYON.wallLevels;
+
+        const wallPoint = (d, side, li) => {
+          const t = li / (levels - 1);
+          const y = floorY(d) + Math.pow(t, 1.15) * CANYON.wallHeight;
+          return new THREE.Vector3(centerX(d) + side * gapAt(d, y), y, -d);
+        };
+
+        for (let i = 0; i < steps; i++) {
+          const d0 = startD + i * CANYON.step;
+          const d1 = d0 + CANYON.step;
+
+          for (const side of [-1, 1]) {
+            for (let li = 0; li < levels - 1; li++) {
+              const t = li / (levels - 1);
+              const shade = 0.80 + noise(d0 * 0.05, li * 2.1) * 0.24;
+              const a = wallPoint(d0, side, li);
+              const b = wallPoint(d1, side, li);
+              const c = wallPoint(d1, side, li + 1);
+              const e = wallPoint(d0, side, li + 1);
+              const cl = wallColor(t, shade);
+              const cu = wallColor((li + 1) / (levels - 1), shade);
+              if (side < 0) mb.quad(a, b, c, e, cl, cl, cu, cu);
+              else mb.quad(a, e, c, b, cl, cu, cu, cl);
+            }
+          }
+
+          // canyon floor, dipped in the middle so it reads as a riverbed
+          const fl = (d, u) => {
+            const w = halfWidth(d);
+            return new THREE.Vector3(
+              centerX(d) + u * w,
+              floorY(d) - (1 - u * u) * 4 + noise(d * 0.04, u * 4) * 3,
+              -d,
+            );
+          };
+          const cols = 5;
+          for (let c = 0; c < cols; c++) {
+            const u0 = -1 + (2 * c) / cols;
+            const u1 = -1 + (2 * (c + 1)) / cols;
+            const shade = 0.82 + noise(d0 * 0.06, c * 3.3) * 0.22;
+            const col = COLOR.sandDark.clone().lerp(COLOR.sand, 1 - Math.abs((u0 + u1) / 2)).multiplyScalar(shade);
+            mb.quad(fl(d0, u0), fl(d0, u1), fl(d1, u1), fl(d1, u0), col, col, col, col);
+          }
+        }
+
+        // spires belong to whichever chunk contains them
+        const spires = [];
+        const i0 = Math.floor((startD - 60) / SPIRE_SPACING);
+        const i1 = Math.ceil((startD + CANYON.chunkLength - 60) / SPIRE_SPACING);
+        for (let i = i0; i <= i1; i++) {
+          const s = spireAt(i);
+          if (!s || s.d < startD || s.d >= startD + CANYON.chunkLength) continue;
+          spires.push(s);
+          const sides = 7;
+          for (let k = 0; k < sides; k++) {
+            const a0 = (k / sides) * Math.PI * 2;
+            const a1 = ((k + 1) / sides) * Math.PI * 2;
+            const rr = (a) => s.radius * (0.78 + noise(Math.cos(a) * 2 + 9, Math.sin(a) * 2) * 0.5);
+            const p = (a, h, shrink) =>
+              new THREE.Vector3(s.x + Math.cos(a) * rr(a) * shrink, s.base + h, s.z + Math.sin(a) * rr(a) * shrink);
+            const levelsS = 4;
+            for (let li = 0; li < levelsS; li++) {
+              const t0 = li / levelsS;
+              const t1 = (li + 1) / levelsS;
+              const sh0 = 1 - t0 * 0.55;
+              const sh1 = 1 - t1 * 0.55;
+              const shade = 0.80 + noise(k * 4.1, li * 2.7) * 0.24;
+              const c0 = wallColor(0.25 + t0 * 0.7, shade);
+              const c1 = wallColor(0.25 + t1 * 0.7, shade);
+              mb.quad(
+                p(a0, s.height * t0, sh0),
+                p(a1, s.height * t0, sh0),
+                p(a1, s.height * t1, sh1),
+                p(a0, s.height * t1, sh1),
+                c0, c0, c1, c1,
+              );
+            }
+          }
+        }
+
+        return { geometry: mb.build(), spires };
+      }
+
+      /* ---------- the streaming canyon ---------- */
+
+      class Canyon {
+        constructor(scene) {
+          this.scene = scene;
+          // geometry is non-indexed, so computeVertexNormals already gives flat facets
+          this.material = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: TOON });
+          this.chunks = [];
+          this.spires = [];
+          this.thermals = [];
+
+          for (let i = 0; i < CANYON.chunkCount; i++) {
+            const mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.material);
+            mesh.frustumCulled = false;
+            scene.add(mesh);
+            this.chunks.push({ mesh, startD: -Infinity, spires: [] });
+          }
+          this.reset();
+        }
+
+        reset() {
+          this.chunks.forEach((c) => (c.startD = -Infinity));
+          this.coveredFrom = null;
+          this.ensure(0);
+        }
+
+        /** Make sure chunks cover the stretch around the given distance. */
+        ensure(d) {
+          const first = Math.floor(d / CANYON.chunkLength) - 1;
+          if (first === this.coveredFrom) return;
+          this.coveredFrom = first;
+
+          for (let i = 0; i < CANYON.chunkCount; i++) {
+            const startD = (first + i) * CANYON.chunkLength;
+            const slot = this.chunks[((first + i) % CANYON.chunkCount + CANYON.chunkCount) % CANYON.chunkCount];
+            if (slot.startD === startD) continue;
+            slot.mesh.geometry.dispose();
+            const { geometry, spires } = buildChunk(startD);
+            slot.mesh.geometry = geometry;
+            slot.startD = startD;
+            slot.spires = spires;
+          }
+          this.spires = this.chunks.flatMap((c) => c.spires);
+
+          this.thermals = [];
+          const t0 = Math.floor((d - 400) / THERMAL_SPACING);
+          for (let i = t0; i <= t0 + 5; i++) if (i >= 0) this.thermals.push(thermalAt(i));
+        }
+
+        updraftAt(pos) {
+          for (const t of this.thermals) {
+            const dx = pos.x - t.x;
+            const dz = pos.z - t.z;
+            const r = Math.hypot(dx, dz);
+            if (r > t.radius) continue;
+            const falloff = 1 - (r / t.radius) ** 2;
+            const height = 1 - Math.min(Math.abs(pos.y - t.y) / 70, 1);
+            return t.strength * falloff * height;
+          }
+          return 0;
+        }
+
+        /** Returns null when clear, or a short reason string on impact. */
+        collide(pos) {
+          const d = distanceOf(pos.z);
+          const lateral = pos.x - centerX(d);
+
+          if (pos.y < floorY(d) + CANYON.clearance + 1.5) return "ground";
+          if (Math.abs(lateral) > gapAt(d, pos.y) - CANYON.clearance) return "wall";
+
+          for (const s of this.spires) {
+            if (Math.abs(pos.z - s.z) > s.radius + 12) continue;
+            const dist = Math.hypot(pos.x - s.x, pos.z - s.z);
+            if (dist < s.radius + CANYON.clearance && pos.y < s.base + s.height) return "rock";
+          }
+          return null;
+        }
+
+        /**
+         * Headwind above the canyon rim. Without it you can simply flap over the walls
+         * and coast where nothing can hit you, which skips the whole game.
+         */
+        ceilingPush(pos) {
+          const d = distanceOf(pos.z);
+          const rim = floorY(d) + CANYON.wallHeight * CANYON.ceilingFraction;
+          const over = pos.y - rim;
+          return over > 0 ? Math.min(over * 0.45, 26) : 0;
+        }
+      }
+
+      /* ==========================================================================
+       * Flight model
+       * ========================================================================== */
+      const FLIGHT = {
+        gravity: 17,
+        cruiseSpeed: 38,
+        minSpeed: 4, // numerical guard only — a slow bird is supposed to fall
+        maxSpeed: 96,
+        stallSpeed: 19,
+
+        // The wing trims itself toward level flight instead of generating raw CL*v^2,
+        // which is what a real bird does with its angle of attack. How much force it
+        // can actually apply scales with the square of airspeed and is capped here —
+        // that ceiling is what turns a fast dive into a hard swoop and leaves a slow
+        // bird mushy and falling.
+        maxAuthority: 3.4,
+        pullOutGain: 1.7, // how hard the wing fights a descent
+        climbDamp: 0.28, // ...and how gently it resists a climb, so flapping still works
+
+        dragOpen: 0.0011, // wings spread — sets the glide ratio
+        dragTuck: 0.0004, // wings folded
+        dragFlap: 0.0012, // extra cost of beating your wings
+
+        maxBank: 1.25, // rad
+        // Critically damped roll: it eases in and settles without overshoot, where a
+        // plain rate limit ramps at a constant speed and then stops dead.
+        bankResponse: 5.2, // rad/s natural frequency
+        bankMaxRate: 3.6, // rad/s ceiling, so a snapped shoulder cannot whip the bird
+        bankLiftCompensation: 0.75,
+
+        flapImpulse: 7, // m/s along the wing's lift axis, at full power
+        flapForward: 5,
+        maxClimbAngle: 0.7, // rad — flapping stops steepening the climb past this
+        flapCost: 11,
+        staminaRegenBase: 5,
+        staminaRegenGlide: 15,
+        exhaustedPower: 0.3,
+      };
+
+      const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+
+      class BirdFlight {
+        constructor() {
+          this.pos = new THREE.Vector3(0, 60, 0);
+          this.vel = new THREE.Vector3(0, 0, -FLIGHT.cruiseSpeed);
+          this.bank = 0;
+          this.bankVel = 0;
+          this.stamina = 100;
+          this.alive = true;
+
+          this.liftAxis = new THREE.Vector3(0, 1, 0); // bird-relative "up", tilted by bank
+          this.wingOpen = 1;
+          this.flapPulse = 0; // decays after each stroke, drives the wing animation
+
+          this._dir = new THREE.Vector3();
+          this._lift = new THREE.Vector3();
+        }
+
+        reset() {
+          this.pos.set(0, 60, 0);
+          this.vel.set(0, 0, -FLIGHT.cruiseSpeed);
+          this.bank = 0;
+          this.bankVel = 0;
+          this.stamina = 100;
+          this.alive = true;
+          this.flapPulse = 0;
+        }
+
+        get speed() {
+          return this.vel.length();
+        }
+
+        get heading() {
+          return Math.atan2(-this.vel.x, -this.vel.z);
+        }
+
+        get pitch() {
+          const s = this.speed;
+          return s < 1e-3 ? 0 : Math.asin(clamp(this.vel.y / s, -1, 1));
+        }
+
+        /**
+         * @param dt       seconds
+         * @param gesture  output of GestureReader.update()
+         * @param world    { updraftAt(pos) -> m/s }
+         */
+        update(dt, gesture, world) {
+          if (!this.alive) return;
+
+          const tuck = gesture.tracked ? gesture.tuck : 0;
+          const glide = gesture.tracked ? gesture.glide : 0.6;
+          const steer = gesture.tracked ? gesture.steer : 0;
+
+          // folding the wings kills lift and drag together — that is what makes a dive work
+          this.wingOpen = clamp(1 - tuck * 0.92, 0.08, 1);
+
+          /* ---- bank chases the steer input ---- */
+          const targetBank = steer * FLIGHT.maxBank;
+          const w = FLIGHT.bankResponse;
+          const accel = w * w * (targetBank - this.bank) - 2 * w * this.bankVel;
+          this.bankVel = clamp(this.bankVel + accel * dt, -FLIGHT.bankMaxRate, FLIGHT.bankMaxRate);
+          this.bank = clamp(this.bank + this.bankVel * dt, -FLIGHT.maxBank, FLIGHT.maxBank);
+
+          /* ---- flight axes ---- */
+          let speed = this.vel.length();
+          if (speed < 1e-3) {
+            this.vel.set(0, 0, -FLIGHT.minSpeed);
+            speed = FLIGHT.minSpeed;
+          }
+          const dir = this._dir.copy(this.vel).divideScalar(speed);
+
+          // lift acts perpendicular to travel, in the vertical plane, then rolls with the bank
+          const lift = this._lift.copy(UP).addScaledVector(dir, -UP.dot(dir));
+          if (lift.lengthSq() < 1e-6) lift.set(0, 1, 0);
+          // rolling about the flight direction tips lift sideways — positive bank is to
+          // the bird's right (+X when flying down -Z), which is what turns it right
+          lift.normalize().applyAxisAngle(dir, this.bank);
+          this.liftAxis.copy(lift);
+
+          /* ---- forces ---- */
+          // below stall speed the wing stops working, so slow flight punishes you
+          const stallFactor = clamp((speed - FLIGHT.stallSpeed * 0.55) / (FLIGHT.stallSpeed * 0.45), 0, 1);
+
+          const speedRatio = speed / FLIGHT.cruiseSpeed;
+          const authority = Math.min(speedRatio * speedRatio, FLIGHT.maxAuthority);
+          const bankCos = Math.max(Math.cos(this.bank), 0.3);
+          const compensation = 1 + (1 / bankCos - 1) * FLIGHT.bankLiftCompensation;
+
+          // what the wing would need to hold this flight path, plus a term pulling it
+          // back toward level — asymmetric, so descents are arrested but climbs are not
+          const recovery = -this.vel.y * (this.vel.y < 0 ? FLIGHT.pullOutGain : FLIGHT.climbDamp);
+          const demand = FLIGHT.gravity * compensation + recovery;
+          const ceiling = FLIGHT.gravity * authority * compensation;
+          const liftMag = clamp(demand, 0, ceiling) * this.wingOpen * stallFactor;
+
+          const drag =
+            FLIGHT.dragOpen * this.wingOpen +
+            FLIGHT.dragTuck * (1 - this.wingOpen) +
+            FLIGHT.dragFlap * (gesture.flapActivity ?? 0);
+
+          this.vel.y -= FLIGHT.gravity * dt;
+          this.vel.addScaledVector(lift, liftMag * dt);
+          this.vel.addScaledVector(dir, -drag * speed * speed * dt);
+
+          /* ---- flap ---- */
+          if (gesture.flap) {
+            let power = gesture.flap.power;
+            const cost = FLIGHT.flapCost * power;
+            if (this.stamina < cost) power *= FLIGHT.exhaustedPower;
+            this.stamina = Math.max(0, this.stamina - cost);
+
+            // taper the kick as the climb steepens, otherwise flapping pitches up until it stalls
+            const headroom = clamp(1 - this.pitch / FLIGHT.maxClimbAngle, 0, 1);
+            this.vel.addScaledVector(lift, FLIGHT.flapImpulse * power * headroom);
+            this.vel.addScaledVector(dir, FLIGHT.flapForward * power);
+            this.flapPulse = Math.min(1, this.flapPulse + power);
+          }
+          this.flapPulse *= Math.exp(-dt / 0.22);
+
+          const regen = FLIGHT.staminaRegenBase + FLIGHT.staminaRegenGlide * glide;
+          this.stamina = Math.min(100, this.stamina + regen * dt);
+
+          /* ---- thermals ---- */
+          const updraft = world?.updraftAt(this.pos) ?? 0;
+          if (updraft > 0) this.vel.y += updraft * (0.45 + 0.9 * glide) * dt;
+
+          /* ---- integrate ---- */
+          const newSpeed = this.vel.length();
+          if (newSpeed > FLIGHT.maxSpeed) this.vel.multiplyScalar(FLIGHT.maxSpeed / newSpeed);
+          else if (newSpeed < FLIGHT.minSpeed) this.vel.multiplyScalar(FLIGHT.minSpeed / newSpeed);
+
+          this.pos.addScaledVector(this.vel, dt);
+        }
+      }
+
+      /* ==========================================================================
+       * The bird: geometry, inked outlines, wing animation
+       * ========================================================================== */
+      // Cool blues against a warm canyon: the bird stays readable against every
+      // background in the level, and toon shading needs bright base colours to
+      // survive being multiplied down into its darkest band.
+      const C = {
+        back: new THREE.Color(0x3d9fd6), // top of the body
+        belly: new THREE.Color(0xfff0c8),
+        wingTop: new THREE.Color(0x49c6d8),
+        wingBand: new THREE.Color(0xfff2d0), // stripe across the wing
+        wingTip: new THREE.Color(0x2a6fa8),
+        wingUnder: new THREE.Color(0x8fe3ea),
+        edge: new THREE.Color(0x16304a), // the drawn-in outline colour
+        beak: new THREE.Color(0xffa62b),
+        eye: new THREE.Color(0xfffaf0),
+        pupil: new THREE.Color(0x16304a),
+      };
+
+      /** Collects flat-shaded triangles with per-vertex colour. */
+      class Tris {
+        constructor() {
+          this.pos = [];
+          this.col = [];
+        }
+        push(...verts) {
+          for (const { v, c } of verts) {
+            this.pos.push(v.x, v.y, v.z);
+            this.col.push(c.r, c.g, c.b);
+          }
+        }
+        tri(a, b, c) {
+          this.push(a, b, c);
+        }
+        quad(a, b, c, d) {
+          this.push(a, b, c, a, c, d);
+        }
+        build() {
+          const g = new THREE.BufferGeometry();
+          g.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
+          g.setAttribute("color", new THREE.Float32BufferAttribute(this.col, 3));
+          g.computeVertexNormals();
+          return g;
+        }
+      }
+
+      /**
+       * Inked outline: the same mesh again, back faces only, pushed out along its
+       * normals. Cheap, and it survives the wings being rotated and scaled.
+       */
+      function outlineMaterial(thickness) {
+        return new THREE.ShaderMaterial({
+          side: THREE.BackSide,
+          uniforms: { uThickness: { value: thickness }, uColor: { value: C.edge } },
+          vertexShader: /* glsl */ `
+            uniform float uThickness;
+            void main() {
+              vec3 p = position + normalize(normal) * uThickness;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+            }`,
+          fragmentShader: /* glsl */ `
+            uniform vec3 uColor;
+            void main() { gl_FragColor = vec4(uColor, 1.0); }`,
+        });
+      }
+
+      /**
+       * Mirrored copy for the other wing. Scaling by -1 would invert the winding and
+       * turn the back-face outline inside out, so the geometry is flipped instead.
+       */
+      function mirroredX(geo) {
+        const g = geo.clone();
+        const attrs = [g.attributes.position, g.attributes.color];
+        const p = g.attributes.position;
+        for (let i = 0; i < p.count; i++) p.setX(i, -p.getX(i));
+        for (let i = 0; i < p.count; i += 3) {
+          for (const a of attrs) {
+            const x = a.getX(i + 1), y = a.getY(i + 1), z = a.getZ(i + 1);
+            a.setXYZ(i + 1, a.getX(i + 2), a.getY(i + 2), a.getZ(i + 2));
+            a.setXYZ(i + 2, x, y, z);
+          }
+        }
+        g.computeVertexNormals();
+        return g;
+      }
+
+      function inked(geometry, material, thickness) {
+        const group = new THREE.Group();
+        group.add(new THREE.Mesh(geometry, outlineMaterial(thickness)));
+        group.add(new THREE.Mesh(geometry, material));
+        return group;
+      }
+
+      /** Rounded low-poly body: fat in the chest, tapering to the tail. */
+      function buildBody() {
+        // [z along the body, radius, vertical squash, belly blend]
+        const profile = [
+          [2.5, 0.12, 1.0, 0.3],
+          [1.8, 0.62, 0.95, 0.5],
+          [0.8, 1.02, 0.9, 0.7],
+          [-0.3, 1.1, 0.86, 0.75],
+          [-1.5, 0.82, 0.9, 0.55],
+          [-2.6, 0.42, 0.95, 0.3],
+          [-3.4, 0.14, 1.0, 0.15],
+        ];
+        const sides = 9;
+        const t = new Tris();
+        const at = (i, k) => {
+          const [z, r, squash, mix] = profile[i];
+          const a = (k / sides) * Math.PI * 2;
+          const underside = Math.max(0, -Math.sin(a));
+          return {
+            v: new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r * squash - 0.08, -z),
+            c: C.back.clone().lerp(C.belly, mix * underside),
+          };
+        };
+        for (let i = 0; i < profile.length - 1; i++)
+          for (let k = 0; k < sides; k++) t.quad(at(i, k), at(i, k + 1), at(i + 1, k + 1), at(i + 1, k));
+        return t.build();
+      }
+
+      /**
+       * A wing with real thickness, so it reads as a solid shape from any angle and
+       * the outline has something to wrap. Rooted at the origin, extending along +X.
+       */
+      function buildWing() {
+        // planform traced root → leading edge → tip → trailing edge
+        const outline = [
+          [0.0, 0.0],
+          [1.5, 1.0],
+          [3.5, 1.25],
+          [5.7, 0.9],
+          [7.5, -0.15],
+          [5.5, -0.85],
+          [3.0, -1.1],
+          [1.2, -0.9],
+        ];
+        const thickness = 0.18;
+        const t = new Tris();
+
+        const span = (x) => x / 7.5;
+        const camber = (x) => Math.sin(span(x) * Math.PI) * 0.26 + x * 0.05;
+        const topColour = (x) => {
+          const s = span(x);
+          if (s > 0.72) return C.wingTip.clone();
+          // one bold stripe partway out, the way a cartoon wing is drawn
+          if (s > 0.44 && s < 0.6) return C.wingBand.clone();
+          return C.wingTop.clone().lerp(C.wingTip, s * 0.5);
+        };
+
+        const face = (i, up) => {
+          const [x, z] = outline[i];
+          return {
+            v: new THREE.Vector3(x, camber(x) + (up ? thickness : -thickness), -z),
+            c: up ? topColour(x) : C.wingUnder.clone(),
+          };
+        };
+
+        // the outline is traced clockwise seen from above, so the top fan is wound
+        // backwards to put its normals up and the bottom fan forwards to put them down
+        for (let i = 1; i < outline.length - 1; i++) {
+          t.tri(face(0, true), face(i + 1, true), face(i, true));
+          t.tri(face(0, false), face(i, false), face(i + 1, false));
+        }
+        // dark rim all the way round — this is what draws the wing's edge
+        for (let i = 0; i < outline.length; i++) {
+          const j = (i + 1) % outline.length;
+          const a = face(i, true), b = face(j, true), c = face(j, false), d = face(i, false);
+          for (const p of [a, b, c, d]) p.c = C.wingTip.clone();
+          t.quad(a, b, c, d);
+        }
+        return t.build();
+      }
+
+      function buildTail() {
+        const outline = [
+          [0, 0],
+          [-1.3, -2.6],
+          [0, -3.2],
+          [1.3, -2.6],
+        ];
+        const thickness = 0.14;
+        const t = new Tris();
+        const face = (i, up) => ({
+          v: new THREE.Vector3(outline[i][0], up ? thickness : -thickness, -outline[i][1]),
+          c: up ? C.wingTop.clone() : C.wingUnder.clone(),
+        });
+        for (let i = 1; i < outline.length - 1; i++) {
+          t.tri(face(0, true), face(i + 1, true), face(i, true));
+          t.tri(face(0, false), face(i, false), face(i + 1, false));
+        }
+        for (let i = 0; i < outline.length; i++) {
+          const j = (i + 1) % outline.length;
+          const a = face(i, true), b = face(j, true), c = face(j, false), d = face(i, false);
+          for (const p of [a, b, c, d]) p.c = C.wingTip.clone();
+          t.quad(a, b, c, d);
+        }
+        return t.build();
+      }
+
+      const flat = (color) => new THREE.MeshBasicMaterial({ color });
+
+      class Bird {
+        constructor(scene) {
+          this.root = new THREE.Group();
+          scene.add(this.root);
+
+          const toon = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: TOON });
+
+          this.root.add(inked(buildBody(), toon, 0.1));
+
+          /* ---- head ---- */
+          const head = new THREE.Group();
+          head.position.set(0, 0.34, -2.55);
+          this.root.add(head);
+
+          const skull = new THREE.IcosahedronGeometry(0.78, 1);
+          head.add(
+            inked(skull, new THREE.MeshToonMaterial({ color: C.back, gradientMap: TOON }), 0.08),
+          );
+
+          const beak = new THREE.ConeGeometry(0.3, 1.1, 6).toNonIndexed();
+          beak.computeVertexNormals();
+          const beakGroup = inked(beak, new THREE.MeshToonMaterial({ color: C.beak, gradientMap: TOON }), 0.06);
+          beakGroup.rotation.x = -Math.PI / 2;
+          beakGroup.position.set(0, -0.06, -0.82);
+          head.add(beakGroup);
+
+          // eyes — barely visible from the chase camera, but they sell every turn
+          for (const side of [-1, 1]) {
+            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.27, 10, 8), flat(C.eye));
+            eye.position.set(side * 0.44, 0.2, -0.46);
+            const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), flat(C.pupil));
+            pupil.position.set(side * 0.5, 0.2, -0.62);
+            head.add(eye, pupil);
+          }
+
+          /* ---- tail ---- */
+          const tail = inked(buildTail(), toon, 0.07);
+          tail.position.set(0, 0.05, 2.2);
+          this.root.add(tail);
+
+          /* ---- wings ---- */
+          const wingGeo = buildWing();
+          this.wingR = new THREE.Group();
+          this.wingL = new THREE.Group();
+          this.wingR.add(inked(wingGeo, toon, 0.08));
+          this.wingL.add(inked(mirroredX(wingGeo), toon, 0.08));
+          this.wingR.position.set(0.62, 0.26, -0.3);
+          this.wingL.position.set(-0.62, 0.26, -0.3);
+          this.root.add(this.wingR, this.wingL);
+
+          this.trail = new Trail(scene);
+          this.idlePhase = 0;
+        }
+
+        reset() {
+          this.trail.reset();
+        }
+
+        update(dt, flight, gesture) {
+          this.root.position.copy(flight.pos);
+          this.root.rotation.set(0, 0, 0);
+          this.root.rotateY(flight.heading);
+          this.root.rotateX(flight.pitch);
+          this.root.rotateZ(-flight.bank);
+
+          /* wings mirror the player's arms directly — that is the whole point */
+          const tracked = gesture.tracked;
+          this.idlePhase += dt * (2.2 + flight.speed * 0.02);
+          const idle = Math.sin(this.idlePhase) * 0.16 - 0.05;
+          const armAngle = tracked ? gesture.wingAngle : idle;
+          const target = THREE.MathUtils.clamp(armAngle, -1.25, 1.45);
+
+          // folding pulls the wing in and sweeps it back, like a stooping falcon
+          const tuck = tracked ? gesture.tuck : 0;
+          const fold = THREE.MathUtils.lerp(1, 0.32, tuck);
+          const sweep = tuck * 0.85;
+
+          for (const [wing, sign] of [
+            [this.wingR, 1],
+            [this.wingL, -1],
+          ]) {
+            wing.rotation.z = sign * target;
+            wing.rotation.y = -sign * sweep;
+            wing.scale.setScalar(fold);
+          }
+
+          this.trail.update(dt, flight);
+        }
+      }
+
+      /** Ribbon behind the bird; width and brightness track airspeed. */
+      class Trail {
+        constructor(scene, segments = 48) {
+          this.segments = segments;
+          this.points = [];
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(segments * 2 * 3), 3));
+          geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(segments * 2 * 3), 3));
+          const index = [];
+          for (let i = 0; i < segments - 1; i++) {
+            const a = i * 2;
+            index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+          }
+          geo.setIndex(index);
+          this.mesh = new THREE.Mesh(
+            geo,
+            new THREE.MeshBasicMaterial({
+              vertexColors: true,
+              transparent: true,
+              opacity: 0.55,
+              blending: THREE.AdditiveBlending,
+              depthWrite: false,
+              side: THREE.DoubleSide,
+            }),
+          );
+          this.mesh.frustumCulled = false;
+          scene.add(this.mesh);
+          this.accum = 0;
+        }
+
+        reset() {
+          this.points.length = 0;
+          this.mesh.visible = false;
+        }
+
+        update(dt, flight) {
+          this.accum += dt;
+          if (this.accum < 0.016) return;
+          this.accum = 0;
+
+          this.points.unshift({ p: flight.pos.clone(), up: flight.liftAxis.clone(), v: flight.speed });
+          if (this.points.length > this.segments) this.points.length = this.segments;
+          if (this.points.length < 4) return;
+
+          const pos = this.mesh.geometry.attributes.position;
+          const col = this.mesh.geometry.attributes.color;
+          const fwd = new THREE.Vector3();
+          const side = new THREE.Vector3();
+
+          for (let i = 0; i < this.segments; i++) {
+            const p = this.points[Math.min(i, this.points.length - 1)];
+            const q = this.points[Math.min(i + 1, this.points.length - 1)];
+            fwd.subVectors(p.p, q.p);
+            if (fwd.lengthSq() < 1e-8) fwd.set(0, 0, -1);
+            side.crossVectors(fwd.normalize(), p.up).normalize();
+
+            const fade = 1 - i / this.segments;
+            const w = 0.5 + (p.v / 90) * 2.6 * fade;
+            const a = i * 2;
+            pos.setXYZ(a, p.p.x - side.x * w, p.p.y - side.y * w, p.p.z - side.z * w);
+            pos.setXYZ(a + 1, p.p.x + side.x * w, p.p.y + side.y * w, p.p.z + side.z * w);
+            const g = fade * fade * (0.25 + (p.v / 90) * 0.75);
+            col.setXYZ(a, g, g * 0.72, g * 0.55);
+            col.setXYZ(a + 1, g, g * 0.72, g * 0.55);
+          }
+          pos.needsUpdate = true;
+          col.needsUpdate = true;
+          this.mesh.visible = true;
+        }
+      }
+
+      /* ==========================================================================
+       * Ring gates
+       * ========================================================================== */
+      const SPACING = 95;
+      const RADIUS = 9.5;
+      const POOL = 10;
+      const BURSTS = 4;
+      const FIRST_D = 180;
+
+      /** Ring gates snake along the canyon so chaining them reads as a line to follow. */
+      function ringAt(index) {
+        const d = index * SPACING + FIRST_D;
+        const w = halfWidth(d);
+        const lateral = Math.sin(d * 0.0182) * w * 0.52 + Math.sin(d * 0.0071 + 2.4) * w * 0.24;
+        return {
+          index,
+          d,
+          x: centerX(d) + lateral,
+          // kept clear of the floor: the lowest gate still leaves room to fly through
+          y: floorY(d) + 44 + 22 * Math.sin(d * 0.0163 + 1.3),
+          z: -d,
+          radius: RADIUS,
+        };
+      }
+
+      const TORUS = new THREE.TorusGeometry(RADIUS, 1.0, 6, 20);
+      const OUTLINE = new THREE.TorusGeometry(RADIUS, 1.32, 6, 20);
+      const DISC = new THREE.CircleGeometry(RADIUS - 1.0, 26);
+
+      function makeGate() {
+        const holder = new THREE.Group();
+        // chunky, unlit and ringed in ink so the gate reads as a drawn object
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xffc53d, transparent: true });
+        const inkMat = new THREE.MeshBasicMaterial({
+          color: 0x3d1638,
+          transparent: true,
+          side: THREE.BackSide,
+        });
+        const discMat = new THREE.MeshBasicMaterial({
+          color: 0xfff0b8,
+          transparent: true,
+          opacity: 0.07,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        holder.add(
+          new THREE.Mesh(OUTLINE, inkMat),
+          new THREE.Mesh(TORUS, ringMat),
+          new THREE.Mesh(DISC, discMat),
+        );
+        holder.visible = false;
+        return { holder, ringMat, inkMat, discMat };
+      }
+
+      class Rings {
+        constructor(scene) {
+          this.group = new THREE.Group();
+          scene.add(this.group);
+
+          this.gates = Array.from({ length: POOL }, () => makeGate());
+          this.bursts = Array.from({ length: BURSTS }, () => ({ ...makeGate(), life: 0 }));
+          [...this.gates, ...this.bursts].forEach((g) => this.group.add(g.holder));
+
+          this.reset();
+        }
+
+        reset() {
+          this.nextIndex = 0;
+          this.combo = 0;
+          this.bestCombo = 0;
+          this.hits = 0;
+          this.misses = 0;
+          this.bursts.forEach((b) => {
+            b.life = 0;
+            b.holder.visible = false;
+          });
+        }
+
+        /** @returns the gate resolved this frame as `{ hit, ring, combo }`, or null. */
+        update(dt, prevPos, pos, time) {
+          let event = null;
+
+          // the bird only ever travels toward -Z, so gates resolve strictly in order
+          while (pos.z <= ringAt(this.nextIndex).z) {
+            const ring = ringAt(this.nextIndex);
+            const span = prevPos.z - pos.z;
+            const t = span > 1e-5 ? (prevPos.z - ring.z) / span : 0;
+            const cx = prevPos.x + (pos.x - prevPos.x) * t;
+            const cy = prevPos.y + (pos.y - prevPos.y) * t;
+            const hit = Math.hypot(cx - ring.x, cy - ring.y) < ring.radius;
+
+            if (hit) {
+              this.hits++;
+              this.combo++;
+              this.bestCombo = Math.max(this.bestCombo, this.combo);
+              this.#spawnBurst(ring);
+            } else {
+              this.misses++;
+              this.combo = 0;
+            }
+            event = { hit, ring, combo: this.combo };
+            this.nextIndex++;
+          }
+
+          this.#layout(time);
+
+          for (const b of this.bursts) {
+            if (b.life <= 0) continue;
+            b.life = Math.max(0, b.life - dt / 0.45);
+            b.holder.scale.setScalar(1 + (1 - b.life) * 0.7);
+            b.ringMat.opacity = b.life;
+            b.inkMat.opacity = b.life;
+            b.discMat.opacity = 0.45 * b.life;
+            if (b.life === 0) b.holder.visible = false;
+          }
+
+          return event;
+        }
+
+        /** Position the gates without scoring them — used for the menu flythrough. */
+        preview(pos, time) {
+          while (pos.z <= ringAt(this.nextIndex).z) this.nextIndex++;
+          this.#layout(time);
+        }
+
+        #layout(time) {
+          for (let i = 0; i < POOL; i++) {
+            const gate = this.gates[i];
+            const ring = ringAt(this.nextIndex + i);
+            gate.holder.visible = true;
+            gate.holder.position.set(ring.x, ring.y, ring.z);
+            gate.holder.rotation.z = time * 0.25 + ring.index;
+            // the nearest gate glows brightest, so the line to follow is unmistakable
+            const prominence = 1 - i / POOL;
+            gate.ringMat.opacity = 0.3 + 0.7 * prominence;
+            gate.inkMat.opacity = 0.3 + 0.7 * prominence;
+            gate.ringMat.color.setHex(i === 0 ? 0xffe0b0 : 0xffb04d);
+            gate.discMat.opacity = 0.04 + 0.07 * prominence;
+          }
+        }
+
+        #spawnBurst(ring) {
+          const b = this.bursts.reduce((a, c) => (c.life < a.life ? c : a));
+          b.life = 1;
+          b.holder.visible = true;
+          b.holder.position.set(ring.x, ring.y, ring.z);
+          b.holder.scale.setScalar(1);
+          b.ringMat.color.setHex(0xfff0d0);
+        }
+      }
+
+      /* ==========================================================================
+       * HUD
+       * ========================================================================== */
+      const $ = (id) => document.getElementById(id);
+
+      class Hud {
+        constructor() {
+          this.el = $("hud");
+          this.score = $("score");
+          this.distance = $("distance");
+          this.combo = $("combo");
+          this.comboValue = $("combo-value");
+          this.stamina = $("stamina-fill");
+          this.speed = $("speed-fill");
+          this.alt = $("alt-fill");
+          this.tilt = $("tilt-needle");
+          this.warning = $("cam-warning");
+          this.modes = {
+            flap: $("mode-flap"),
+            glide: $("mode-glide"),
+            dive: $("mode-dive"),
+          };
+          this.shownScore = 0;
+        }
+
+        show(visible) {
+          this.el.hidden = !visible;
+        }
+
+        reset() {
+          this.shownScore = 0;
+        }
+
+        update(dt, flight, gesture, session) {
+          // count the score up rather than snapping, so ring pickups register visually
+          this.shownScore += (session.score - this.shownScore) * (1 - Math.exp(-dt * 9));
+          if (Math.abs(session.score - this.shownScore) < 0.6) this.shownScore = session.score;
+          this.score.textContent = Math.round(this.shownScore).toLocaleString();
+          this.distance.innerHTML = `${Math.max(0, Math.round(session.distance))}<em>m</em>`;
+
+          const chaining = session.combo >= 2;
+          this.combo.hidden = !chaining;
+          if (chaining) this.comboValue.textContent = session.combo;
+
+          const staminaPct = flight.stamina;
+          this.stamina.style.width = `${staminaPct}%`;
+          this.stamina.classList.toggle("low", staminaPct < 30);
+
+          const speedNorm = (flight.speed - FLIGHT.minSpeed) / (FLIGHT.maxSpeed - FLIGHT.minSpeed);
+          this.speed.style.width = `${Math.round(speedNorm * 100)}%`;
+
+          // height above the canyon floor, not above sea level — that is what you can hit
+          const altNorm = Math.min(Math.max(session.altitude / session.ceiling, 0), 1);
+          this.alt.style.width = `${Math.round(altNorm * 100)}%`;
+
+          const steer = gesture.tracked ? gesture.steer : 0;
+          this.tilt.style.transform = `translateX(${steer * 72}px) rotate(${steer * 14}deg)`;
+
+          this.modes.flap.classList.toggle("active", gesture.flapActivity > 0.25);
+          this.modes.dive.classList.toggle("active", gesture.tracked && gesture.tuck > 0.5);
+          this.modes.glide.classList.toggle(
+            "active",
+            gesture.tracked && gesture.glide > 0.4 && gesture.tuck < 0.4,
+          );
+
+          const hint = gesture.hint || "";
+          this.warning.hidden = !hint;
+          if (hint) this.warning.textContent = hint;
+        }
+      }
+
+      /* ==========================================================================
+       * Webcam + MediaPipe pose tracking
+       * ========================================================================== */
+      // Loaded straight from a CDN: no build step, so there is nothing to bundle.
+      const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
+      const MODEL_URL =
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
+
+      const LM = {
+        NOSE: 0,
+        LEFT_SHOULDER: 11,
+        RIGHT_SHOULDER: 12,
+        LEFT_ELBOW: 13,
+        RIGHT_ELBOW: 14,
+        LEFT_WRIST: 15,
+        RIGHT_WRIST: 16,
+        LEFT_HIP: 23,
+        RIGHT_HIP: 24,
+      };
+
+      const SKELETON_EDGES = [
+        [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER],
+        [LM.LEFT_SHOULDER, LM.LEFT_ELBOW],
+        [LM.LEFT_ELBOW, LM.LEFT_WRIST],
+        [LM.RIGHT_SHOULDER, LM.RIGHT_ELBOW],
+        [LM.RIGHT_ELBOW, LM.RIGHT_WRIST],
+        [LM.LEFT_SHOULDER, LM.LEFT_HIP],
+        [LM.RIGHT_SHOULDER, LM.RIGHT_HIP],
+        [LM.LEFT_HIP, LM.RIGHT_HIP],
+      ];
+
+      /**
+       * Webcam + MediaPipe PoseLandmarker. `poll()` is cheap to call every frame:
+       * it only runs inference when the video has actually advanced to a new frame.
+       */
+      class PoseTracker {
+        constructor(video) {
+          this.video = video;
+          this.landmarker = null;
+          this.stream = null;
+          this.lastVideoTime = -1;
+          this.result = null;
+          this.ready = false;
+        }
+
+        async loadModel() {
+          const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
+          const options = (delegate) => ({
+            baseOptions: { modelAssetPath: MODEL_URL, delegate },
+            runningMode: "VIDEO",
+            numPoses: 1,
+            minPoseDetectionConfidence: 0.5,
+            minPosePresenceConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+            outputSegmentationMasks: false,
+          });
+          try {
+            this.landmarker = await PoseLandmarker.createFromOptions(vision, options("GPU"));
+            this.delegate = "GPU";
+          } catch {
+            // some drivers refuse the WebGL delegate; CPU is slower but always works
+            this.landmarker = await PoseLandmarker.createFromOptions(vision, options("CPU"));
+            this.delegate = "CPU";
+          }
+        }
+
+        /** Video inputs, once permission has been granted (labels are empty before that). */
+        async listCameras() {
+          if (!navigator.mediaDevices?.enumerateDevices) return [];
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          return devices.filter((d) => d.kind === "videoinput");
+        }
+
+        async startCamera(deviceId) {
+          this.stopCamera();
+          // 60fps where the webcam offers it: every extra frame is an extra pose sample,
+          // and tracking responsiveness is bounded by the camera, not by the renderer.
+          const size = { width: { ideal: 960 }, height: { ideal: 720 }, frameRate: { ideal: 60 } };
+          const video = deviceId ? { deviceId: { exact: deviceId }, ...size } : { facingMode: "user", ...size };
+
+          this.stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+          this.video.srcObject = this.stream;
+          this.video.muted = true;
+          this.video.playsInline = true;
+          await this.video.play();
+          await new Promise((resolve, reject) => {
+            if (this.video.videoWidth > 0) return resolve();
+            const timer = setTimeout(() => reject(new Error("camera-timeout")), 8000);
+            this.video.addEventListener(
+              "loadeddata",
+              () => {
+                clearTimeout(timer);
+                resolve();
+              },
+              { once: true },
+            );
+          });
+          this.deviceId = this.stream.getVideoTracks()[0]?.getSettings()?.deviceId ?? deviceId;
+          this.lastVideoTime = -1;
+          this.ready = true;
+        }
+
+        /** Returns the latest MediaPipe result, or null if nobody has been seen yet. */
+        poll(nowMs) {
+          if (!this.ready || !this.landmarker) return this.result;
+          if (this.video.currentTime === this.lastVideoTime) return this.result;
+          this.lastVideoTime = this.video.currentTime;
+
+          const out = this.landmarker.detectForVideo(this.video, nowMs);
+          if (out?.landmarks?.length) {
+            this.result = {
+              landmarks: out.landmarks[0],
+              world: out.worldLandmarks[0],
+              stamp: nowMs,
+            };
+          } else {
+            this.result = null;
+          }
+          return this.result;
+        }
+
+        stopCamera() {
+          this.stream?.getTracks().forEach((t) => t.stop());
+          this.stream = null;
+          this.video.srcObject = null;
+          this.ready = false;
+        }
+
+        stop() {
+          this.stopCamera();
+          this.landmarker?.close();
+          this.landmarker = null;
+        }
+      }
+
+      /* ==========================================================================
+       * Turning poses into flight intent
+       * ========================================================================== */
+      /* ------------------------------------------------------------------ *
+       * tuning — every feel-related constant lives here
+       * ------------------------------------------------------------------ */
+      const TUNE = {
+        // A flap is a downstroke measured against wherever the player's own arms
+        // peaked, not against the horizon — plenty of people beat entirely below
+        // shoulder height, and absolute thresholds would never fire for them.
+        flapMinSweep: 0.5, // rad the arms must fall from their peak
+        flapMinSpeed: 1.8, // rad/s, so slowly lowering the arms is not a flap
+        flapPeakDecay: 0.9, // rad/s the remembered peak sags toward the current angle
+        // reference stroke: a committed ~100° beat at a brisk cadence scores 1.0, so a
+        // half-hearted flutter reads weak and a full-arm heave reads strong
+        flapRefSweep: 1.7, // rad of travel
+        flapRefSpeed: 9, // rad/s downstroke speed
+        flapMinExtension: 0.5, // arms must be at least this straight to count
+        flapCooldown: 0.16, // s
+        flapDecay: 0.85, // s, how fast the "recently flapping" signal fades
+
+        spreadGlide: 0.62, // lateral reach/arm-length where gliding begins
+        spreadTuck: 0.26, // ...and where a full tuck is reached
+        spreadOutLo: 0.58,
+        spreadOutHi: 0.82,
+        glideLevelBand: 0.55, // rad from horizontal still considered "held out"
+
+        steerBankGain: 1.45, // shoulder-drop contribution
+        steerLeanGain: 1.1, // torso-lean contribution
+        steerDeadzone: 0.07,
+
+        visibilityFloor: 0.45,
+
+        // The camera delivers ~30 poses/s while the game renders at 60+. Controls are
+        // therefore eased toward the latest reading every frame, which removes the
+        // staircase without adding meaningful lag.
+        easeTau: 0.05, // s, for tuck/glide/wing
+        steerTau: 0.075, // s, steering wants to feel a touch heavier
+        lostTau: 0.3, // s, drifting back to neutral when the body is lost
+        lostGrace: 0.35, // s a dropout is ignored before neutral is targeted
+      };
+
+      /* ------------------------------------------------------------------ *
+       * helpers
+       * ------------------------------------------------------------------ */
+      const invLerp = (a, b, v) => clamp((v - a) / (b - a), 0, 1);
+      const smoothstep = (a, b, v) => {
+        const t = invLerp(a, b, v);
+        return t * t * (3 - 2 * t);
+      };
+      const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+      const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 });
+      const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+      const len = (a) => Math.hypot(a.x, a.y, a.z);
+      const scale = (a, s) => ({ x: a.x * s, y: a.y * s, z: a.z * s });
+      const norm = (a) => {
+        const l = len(a) || 1e-6;
+        return scale(a, 1 / l);
+      };
+      const median = (arr) => {
+        if (!arr.length) return 0;
+        const s = [...arr].sort((a, b) => a - b);
+        return s[Math.floor(s.length / 2)];
+      };
+
+      /** One-euro filter: smooths jitter when still without adding lag when moving fast. */
+      class OneEuro {
+        constructor(minCutoff = 1.2, beta = 0.35, dCutoff = 1.0) {
+          this.minCutoff = minCutoff;
+          this.beta = beta;
+          this.dCutoff = dCutoff;
+          this.x = null;
+          this.dx = 0;
+        }
+        static alpha(cutoff, dt) {
+          const tau = 1 / (2 * Math.PI * cutoff);
+          return 1 / (1 + tau / dt);
+        }
+        filter(value, dt) {
+          if (this.x === null) {
+            this.x = value;
+            return value;
+          }
+          const dxRaw = (value - this.x) / dt;
+          this.dx = OneEuro.alpha(this.dCutoff, dt) * dxRaw + (1 - OneEuro.alpha(this.dCutoff, dt)) * this.dx;
+          const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+          const a = OneEuro.alpha(cutoff, dt);
+          this.x = a * value + (1 - a) * this.x;
+          return this.x;
+        }
+        get velocity() {
+          return this.dx;
+        }
+      }
+
+      /* ------------------------------------------------------------------ *
+       * raw body measurements, in a frame anchored to the player's torso
+       * ------------------------------------------------------------------ */
+      function measure(world, landmarks, armRef = null) {
+        const w = world;
+        const ls = w[LM.LEFT_SHOULDER];
+        const rs = w[LM.RIGHT_SHOULDER];
+        const lh = w[LM.LEFT_HIP];
+        const rh = w[LM.RIGHT_HIP];
+        const lw = w[LM.LEFT_WRIST];
+        const rw = w[LM.RIGHT_WRIST];
+        const le = w[LM.LEFT_ELBOW];
+        const re = w[LM.RIGHT_ELBOW];
+        if (!ls || !rs || !lh || !rh || !lw || !rw) return null;
+
+        const shoulderMid = mid(ls, rs);
+        const hipMid = mid(lh, rh);
+        const shoulderWidth = Math.max(len(sub(rs, ls)), 1e-3);
+
+        // torso-local axes: `up` runs hips→shoulders, `right` points to the player's right
+        const up = norm(sub(shoulderMid, hipMid));
+        const rightRaw = sub(rs, ls);
+        const right = norm(sub(rightRaw, scale(up, dot(rightRaw, up))));
+
+        const armLenL = Math.max(len(sub(le, ls)) + len(sub(lw, le)), 1e-3);
+        const armLenR = Math.max(len(sub(re, rs)) + len(sub(rw, re)), 1e-3);
+
+        const vL = sub(lw, ls);
+        const vR = sub(rw, rs);
+
+        // lateral = reach away from the torso; vertical = reach along the torso's up axis
+        const latL = -dot(vL, right);
+        const latR = dot(vR, right);
+        const vertL = dot(vL, up);
+        const vertR = dot(vR, up);
+
+        // a calibrated arm length is steadier than the live one, which jitters with the elbow
+        const refL = armRef ?? armLenL;
+        const refR = armRef ?? armLenR;
+
+        const vis = (i) => landmarks[i]?.visibility ?? 1;
+
+        return {
+          shoulderWidth,
+          armLen: (armLenL + armLenR) / 2,
+          // atan2 against a floored lateral term keeps a fully tucked arm from reading as "overhead"
+          wingAngleL: Math.atan2(vertL, Math.max(latL, 0.03)),
+          wingAngleR: Math.atan2(vertR, Math.max(latR, 0.03)),
+          spreadL: latL / refL,
+          spreadR: latR / refR,
+          extensionL: len(vL) / refL,
+          extensionR: len(vR) / refR,
+          // roll and lean need a gravity reference, so these use world axes, not torso axes
+          bankRight: (rs.y - ls.y) / shoulderWidth,
+          leanRight: -(shoulderMid.x - hipMid.x) / shoulderWidth,
+          visibility: Math.min(
+            vis(LM.LEFT_SHOULDER),
+            vis(LM.RIGHT_SHOULDER),
+            vis(LM.LEFT_HIP),
+            vis(LM.RIGHT_HIP),
+            vis(LM.LEFT_WRIST),
+            vis(LM.RIGHT_WRIST),
+          ),
+          hipScreenY: (landmarks[LM.LEFT_HIP].y + landmarks[LM.RIGHT_HIP].y) / 2,
+        };
+      }
+
+      /**
+       * What the bird is told to do when nobody is being tracked: wings held out in a
+       * steady glide, no steering. Losing the player should never slam the controls.
+       */
+      const NEUTRAL = () => ({ wingAngle: 0, spread: 0.9, extension: 0.9, tuck: 0, glide: 0.6, steer: 0 });
+
+      /* ------------------------------------------------------------------ *
+       * GestureReader — turns pose frames into flight intent
+       * ------------------------------------------------------------------ */
+      class GestureReader {
+        constructor() {
+          this.cal = { bankOffset: 0, leanOffset: 0, armLen: null, ready: false };
+          this.samples = null;
+
+          this.fWing = new OneEuro(1.6, 0.8);
+          this.fSpread = new OneEuro(1.1, 0.3);
+          this.fExtension = new OneEuro(1.1, 0.3);
+          this.fSteer = new OneEuro(0.9, 0.25);
+
+          this.flapPeak = 0;
+          this.stroking = false;
+          this.strokeTop = 0;
+          this.strokeLow = 0;
+          this.strokeVel = 0;
+          this.flapCooldown = 0;
+          this.flapActivity = 0;
+
+          this.lastResult = null;
+          this.sinceSample = 0;
+          this.lostFor = 0;
+          // what the latest pose asked for, and what the bird is actually being given
+          this.target = NEUTRAL();
+          this.smooth = NEUTRAL();
+          this.measured = null;
+          this.out = this.#blank();
+        }
+
+        #blank() {
+          return {
+            tracked: false,
+            visible: false,
+            wingAngle: 0,
+            wingAngleL: 0,
+            wingAngleR: 0,
+            spread: 0,
+            extension: 0,
+            tuck: 0,
+            glide: 0,
+            flapActivity: 0,
+            flap: null,
+            steer: 0,
+            hint: "no body detected",
+          };
+        }
+
+        /* ---- calibration: player stands in a T-pose for a couple of seconds ---- */
+        beginCalibration() {
+          this.samples = { bank: [], lean: [], arm: [], spread: [], last: null, quality: 0 };
+        }
+
+        /** Feed a pose frame during calibration. Returns 0..1 quality of the current pose. */
+        sampleCalibration(result) {
+          if (!result || !this.samples) return 0;
+          // called every render frame, but only every other one carries a new pose
+          if (result === this.samples.last) return this.samples.quality;
+          this.samples.last = result;
+
+          const m = measure(result.world, result.landmarks);
+          if (!m || m.visibility < TUNE.visibilityFloor) return (this.samples.quality = 0);
+
+          const spread = (m.spreadL + m.spreadR) / 2;
+          const levelness = 1 - clamp((Math.abs(m.wingAngleL) + Math.abs(m.wingAngleR)) / 2 / 0.6, 0, 1);
+          const quality = smoothstep(0.55, 0.85, spread) * levelness;
+          if (quality > 0.35) {
+            this.samples.bank.push(m.bankRight);
+            this.samples.lean.push(m.leanRight);
+            this.samples.arm.push(m.armLen);
+            this.samples.spread.push(spread);
+          }
+          return (this.samples.quality = quality);
+        }
+
+        finishCalibration() {
+          if (!this.samples || this.samples.bank.length < 5) return false;
+          this.cal = {
+            bankOffset: median(this.samples.bank),
+            leanOffset: median(this.samples.lean),
+            armLen: median(this.samples.arm),
+            ready: true,
+          };
+          this.samples = null;
+          return true;
+        }
+
+        /* ---- per-frame read ---- */
+        update(result, dt) {
+          dt = clamp(dt, 1 / 240, 1 / 15);
+          this.flapCooldown = Math.max(0, this.flapCooldown - dt);
+          this.flapActivity *= Math.exp(-dt / TUNE.flapDecay);
+
+          // Inference only runs when the webcam produces a new frame, so the tracker
+          // hands back the very same object on most render frames. Re-filtering it
+          // would feed the velocity estimator duplicates and sap the speed a flap is
+          // scored on, so identity is the freshness test.
+          const fresh = !!result && result !== this.lastResult;
+          this.sinceSample += dt;
+          let flap = null;
+
+          if (fresh) {
+            this.lastResult = result;
+            flap = this.#analyse(result, clamp(this.sinceSample, 1 / 240, 1 / 10));
+            this.sinceSample = 0;
+          }
+
+          // a blink of lost tracking keeps the last intent; a real loss drifts to neutral
+          this.lostFor = result ? 0 : this.lostFor + dt;
+          if (this.lostFor > TUNE.lostGrace) this.target = NEUTRAL();
+
+          const ease = (key, tau) => {
+            const k = 1 - Math.exp(-dt / tau);
+            this.smooth[key] += (this.target[key] - this.smooth[key]) * k;
+          };
+          const slow = this.lostFor > TUNE.lostGrace;
+          ease("wingAngle", slow ? TUNE.lostTau : TUNE.easeTau);
+          ease("spread", slow ? TUNE.lostTau : TUNE.easeTau);
+          ease("extension", slow ? TUNE.lostTau : TUNE.easeTau);
+          ease("tuck", slow ? TUNE.lostTau : TUNE.easeTau);
+          ease("glide", slow ? TUNE.lostTau : TUNE.easeTau);
+          ease("steer", slow ? TUNE.lostTau : TUNE.steerTau);
+
+          const m = this.measured;
+          const lost = this.lostFor > TUNE.lostGrace;
+          this.out = {
+            tracked: !!m && !lost,
+            visible: !!m && !lost && m.visibility >= TUNE.visibilityFloor,
+            wingAngle: this.smooth.wingAngle,
+            wingAngleL: m?.wingAngleL ?? 0,
+            wingAngleR: m?.wingAngleR ?? 0,
+            spread: this.smooth.spread,
+            extension: this.smooth.extension,
+            tuck: this.smooth.tuck,
+            glide: this.smooth.glide,
+            flapActivity: clamp(this.flapActivity, 0, 1),
+            flap,
+            steer: clamp(this.smooth.steer, -1, 1),
+            hint: lost ? "no body detected" : (this.hint ?? ""),
+          };
+          return this.out;
+        }
+
+        /** Runs once per camera frame. Sets `this.target`; returns a flap event or null. */
+        #analyse(result, dt) {
+          const m = measure(result.world, result.landmarks, this.cal.armLen);
+          this.measured = m;
+          if (!m) {
+            this.hint = "no body detected";
+            return null;
+          }
+
+          const visible = m.visibility >= TUNE.visibilityFloor;
+          const wingAngle = this.fWing.filter((m.wingAngleL + m.wingAngleR) / 2, dt);
+          const wingVel = this.fWing.velocity; // rad/s, negative on a downstroke
+          const spread = this.fSpread.filter((m.spreadL + m.spreadR) / 2, dt);
+          const extension = this.fExtension.filter((m.extensionL + m.extensionR) / 2, dt);
+
+          /* --- flap: a downstroke away from the player's own peak, scored by
+                 how far and how fast it swept --- */
+          let flap = null;
+          if (extension < TUNE.flapMinExtension) {
+            // arms folded: whatever they are doing, it is not a wingbeat
+            this.stroking = false;
+            this.flapPeak = wingAngle;
+          } else if (!this.stroking) {
+            // watching for a downstroke to begin
+            if (wingAngle >= this.flapPeak) this.flapPeak = wingAngle;
+            // let the peak sag, so a stroke started from a lower arc still counts
+            else this.flapPeak = Math.max(this.flapPeak - TUNE.flapPeakDecay * dt, wingAngle);
+
+            if (wingVel <= -TUNE.flapMinSpeed) {
+              this.stroking = true;
+              this.strokeTop = this.flapPeak;
+              this.strokeLow = wingAngle;
+              this.strokeVel = -wingVel;
+            }
+          } else {
+            this.strokeLow = Math.min(this.strokeLow, wingAngle);
+            this.strokeVel = Math.max(this.strokeVel, -wingVel);
+
+            // the beat lands when the arms stop going down, and is scored on the whole
+            // stroke — firing partway through would make every flap feel identical
+            if (wingVel > -TUNE.flapMinSpeed * 0.35) {
+              const sweep = this.strokeTop - this.strokeLow;
+              if (sweep >= TUNE.flapMinSweep && this.flapCooldown === 0) {
+                const power =
+                  clamp(sweep / TUNE.flapRefSweep, 0.25, 1.3) *
+                  clamp(this.strokeVel / TUNE.flapRefSpeed, 0.3, 1.25);
+                flap = { power: clamp(power, 0.15, 1.35), sweep };
+                this.flapActivity = Math.max(this.flapActivity, clamp(power, 0, 1));
+                this.flapCooldown = TUNE.flapCooldown;
+              }
+              this.stroking = false;
+              this.flapPeak = wingAngle;
+            }
+          }
+
+          /* --- tuck / glide, as continuous blends rather than exclusive states --- */
+          const tuck = invLerp(TUNE.spreadGlide, TUNE.spreadTuck, spread);
+          const armsOut = smoothstep(TUNE.spreadOutLo, TUNE.spreadOutHi, spread);
+          const level = 1 - clamp(Math.abs(wingAngle) / TUNE.glideLevelBand, 0, 1);
+          const glide = armsOut * level * (1 - clamp(this.flapActivity, 0, 1));
+
+          /* --- steer: shoulder roll plus torso lean, both relative to calibration --- */
+          const bank = m.bankRight - this.cal.bankOffset;
+          const lean = m.leanRight - this.cal.leanOffset;
+          let steerRaw = bank * TUNE.steerBankGain + lean * TUNE.steerLeanGain;
+          const sign = Math.sign(steerRaw);
+          const mag = invLerp(TUNE.steerDeadzone, 1, Math.abs(steerRaw));
+          const steer = this.fSteer.filter(sign * mag * mag * 0.55 + sign * mag * 0.45, dt);
+
+          this.hint = !visible
+            ? "step back — full torso not visible"
+            : m.hipScreenY > 0.97
+              ? "step back — hips out of frame"
+              : "";
+
+          this.target = { wingAngle, spread, extension, tuck, glide, steer: clamp(steer, -1, 1) };
+          return flap;
+        }
+      }
+
+      /* ==========================================================================
+       * Keyboard fallback
+       * ========================================================================== */
+      /**
+       * Keyboard stand-in for the pose reader, used when the camera is unavailable
+       * or denied. Emits exactly the same shape as GestureReader.update().
+       */
+      class KeyboardGestures {
+        constructor() {
+          this.keys = new Set();
+          this.steer = 0;
+          this.flapActivity = 0;
+          this.pendingFlap = false;
+
+          addEventListener("keydown", (e) => {
+            if (e.repeat) return;
+            this.keys.add(e.code);
+            if (e.code === "Space") {
+              this.pendingFlap = true;
+              e.preventDefault();
+            }
+          });
+          addEventListener("keyup", (e) => this.keys.delete(e.code));
+          addEventListener("blur", () => this.keys.clear());
+        }
+
+        update(_result, dt) {
+          const held = (...codes) => codes.some((c) => this.keys.has(c));
+          const tuck = held("ShiftLeft", "ShiftRight", "KeyS", "ArrowDown") ? 1 : 0;
+
+          const dir = (held("KeyD", "ArrowRight") ? 1 : 0) - (held("KeyA", "ArrowLeft") ? 1 : 0);
+          this.steer += (dir - this.steer) * (1 - Math.exp(-dt * 6));
+
+          const flap = this.pendingFlap ? { power: 1, sweep: 1 } : null;
+          this.pendingFlap = false;
+          this.flapActivity = flap ? 1 : this.flapActivity * Math.exp(-dt / 0.55);
+
+          const wingAngle = flap ? 1.1 : -0.05 + this.flapActivity * 0.9;
+
+          return {
+            tracked: true,
+            visible: true,
+            wingAngle,
+            spread: tuck ? 0.2 : 0.9,
+            extension: tuck ? 0.4 : 0.95,
+            tuck,
+            glide: tuck ? 0 : 1 - this.flapActivity,
+            flapActivity: this.flapActivity,
+            flap,
+            steer: this.steer,
+            hint: "",
+          };
+        }
+      }
+
+      /* ==========================================================================
+       * Skeleton overlay on the camera inset
+       * ========================================================================== */
+      const COLORS = {
+        idle: "#f7efe4",
+        flap: "#ffb347",
+        glide: "#5fd7c8",
+        dive: "#ff6b6b",
+      };
+
+      const DOTS = [
+        LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER,
+        LM.LEFT_ELBOW, LM.RIGHT_ELBOW,
+        LM.LEFT_WRIST, LM.RIGHT_WRIST,
+        LM.LEFT_HIP, LM.RIGHT_HIP,
+      ];
+
+      /** The canvas is CSS-mirrored to match the video, so landmarks are drawn as-is. */
+      function drawOverlay(canvas, result, gesture) {
+        const ctx = canvas.getContext("2d");
+        const { width: w, height: h } = canvas;
+        ctx.clearRect(0, 0, w, h);
+        if (!result) return;
+
+        const lm = result.landmarks;
+        let color = COLORS.idle;
+        if (gesture?.tracked) {
+          if (gesture.flapActivity > 0.25) color = COLORS.flap;
+          else if (gesture.tuck > 0.5) color = COLORS.dive;
+          else if (gesture.glide > 0.4) color = COLORS.glide;
+        }
+
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        for (const [a, b] of SKELETON_EDGES) {
+          if (!lm[a] || !lm[b]) continue;
+          ctx.moveTo(lm[a].x * w, lm[a].y * h);
+          ctx.lineTo(lm[b].x * w, lm[b].y * h);
+        }
+        ctx.stroke();
+
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = color;
+        for (const i of DOTS) {
+          const p = lm[i];
+          if (!p) continue;
+          ctx.beginPath();
+          ctx.arc(p.x * w, p.y * h, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      /* ==========================================================================
+       * Menu stick-figure art
+       * ========================================================================== */
+      const FIG = {
+        // [left wrist, left elbow, right elbow, right wrist] as x,y pairs; torso is fixed
+        flap: [[8, 8], [20, 12], [44, 12], [56, 8]],
+        glide: [[4, 24], [18, 24], [46, 24], [60, 24]],
+        dive: [[22, 40], [26, 32], [38, 32], [42, 40]],
+        tilt: [[6, 34], [19, 30], [45, 18], [58, 12]],
+      };
+
+      const ACCENT = { flap: "#ffb347", glide: "#5fd7c8", dive: "#ff6b6b", tilt: "#f7efe4" };
+
+      /** Small stick-figure diagram of each pose, drawn inline so the CSS stays simple. */
+      function poseArt(kind) {
+        const [lw, le, re, rw] = FIG[kind];
+        const tilt = kind === "tilt" ? 10 : 0;
+        const arrows =
+          kind === "flap"
+            ? `<path d="M12 14 v9 m0 0 l-3 -3 m3 3 l3 -3" /><path d="M52 14 v9 m0 0 l-3 -3 m3 3 l3 -3" />`
+            : kind === "dive"
+              ? `<path d="M32 46 v8 m0 0 l-3.5 -3.5 m3.5 3.5 l3.5 -3.5" />`
+              : kind === "tilt"
+                ? `<path d="M46 44 a16 16 0 0 0 -14 -8" /><path d="M32 36 l4 -3 m-4 3 l4 3" />`
+                : `<path d="M8 26 h-5 m0 0 l3.5 -3 m-3.5 3 l3.5 3" /><path d="M56 26 h5 m0 0 l-3.5 -3 m3.5 3 l-3.5 3" />`;
+
+        return `<svg viewBox="0 0 64 56" fill="none" stroke="${ACCENT[kind]}" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <g transform="rotate(${tilt} 32 30)">
+            <circle cx="32" cy="14" r="4.5" />
+            <path d="M32 19 v16" />
+            <path d="M32 24 L${le[0]} ${le[1]} L${lw[0]} ${lw[1]}" />
+            <path d="M32 24 L${re[0]} ${re[1]} L${rw[0]} ${rw[1]}" />
+            <path d="M32 35 l-6 12 M32 35 l6 12" />
+          </g>
+          <g stroke-width="1.6" opacity="0.75">${arrows}</g>
+        </svg>`;
+      }
+
+      function paintPoseArt(root = document) {
+        root.querySelectorAll("[data-art]").forEach((el) => {
+          el.innerHTML = poseArt(el.dataset.art);
+        });
+      }
+
+      /* ==========================================================================
+       * Wiring and the main loop
+       * ========================================================================== */
+      const CALIBRATION_SECONDS = 2.5;
+      const RING_POINTS = 100;
+      const MAX_MULTIPLIER = 8;
+
+      const el = {
+        screen: $("screen"),
+        card: $("screen-card"),
+        status: $("status"),
+        button: $("primary-btn"),
+        cam: $("cam"),
+        video: $("cam-video"),
+        overlay: $("cam-overlay"),
+        canvas: $("scene"),
+      };
+
+      const gfx = createScene(el.canvas);
+      const chase = new ChaseCamera(gfx.camera);
+      const canyon = new Canyon(gfx.scene);
+      const rings = new Rings(gfx.scene);
+      const bird = new Bird(gfx.scene);
+      const flight = new BirdFlight();
+      const hud = new Hud();
+
+      const tracker = new PoseTracker(el.video);
+      const poseReader = new GestureReader();
+      const keyboard = new KeyboardGestures();
+
+      let reader = poseReader;
+      let mode = "boot"; // boot | title | calibrating | playing | paused | dying | dead
+      // The reader already rides out brief dropouts, so this only has to cover the
+      // gap between "really gone" and "flying blind into a wall".
+      const LOST_PAUSE = 0.25; // s after the reader gives up before the run pauses
+      const RESUME_DELAY = 1.5; // s of countdown once the player is back in frame
+      let lostTimer = 0;
+      let resumeTimer = 0;
+      let calibration = 0;
+      let crashTimer = 0;
+      let lastResult = null;
+      let cameraReady = false; // permission granted and the stream is live
+      let lastStatus = ""; // avoids rewriting the title status text every frame
+      const prevPos = new THREE.Vector3();
+
+      // screens replace the card's contents, so keep the original to come back to
+      const titleCardHTML = el.card.innerHTML;
+
+      function restoreTitleCard() {
+        if (el.status.isConnected) return;
+        el.card.innerHTML = titleCardHTML;
+        el.status = $("status");
+        el.button = $("primary-btn");
+        paintPoseArt(el.card);
+      }
+
+      const session = {
+        score: 0,
+        ringScore: 0,
+        distance: 0,
+        best: 0,
+        combo: 0,
+        cause: "",
+        altitude: 0,
+        ceiling: CANYON.wallHeight * CANYON.ceilingFraction,
+      };
+
+      /* ------------------------------------------------------------------ *
+       * screens
+       * ------------------------------------------------------------------ */
+
+      function setScreen(visible) {
+        if (visible) {
+          el.screen.hidden = false;
+          el.screen.classList.remove("leaving");
+        } else {
+          el.screen.classList.add("leaving");
+          setTimeout(() => (el.screen.hidden = true), 350);
+        }
+      }
+
+      function showCalibration() {
+        mode = "calibrating";
+        calibration = 0;
+        poseReader.beginCalibration();
+        el.cam.hidden = false;
+        el.card.innerHTML = `
+          <div class="calibrate">
+            <h1 class="title" style="font-size:44px">Stand like a bird</h1>
+            <p class="subtitle" style="margin-bottom:0">Arms straight out to the sides. Hold still.</p>
+            <div class="calibrate-ring" id="cal-ring"><span id="cal-count">3</span></div>
+            <p class="status" id="cal-hint">Looking for you…</p>
+            <select class="picker" id="cam-picker" hidden></select>
+            <p class="footnote">Stand back until your hips and both hands are in the box, top right.</p>
+          </div>`;
+        setScreen(true);
+        buildCameraPicker();
+      }
+
+      function finishCalibration() {
+        if (!poseReader.finishCalibration()) {
+          $("cal-hint").textContent = "Didn't get a clean read — try again, arms level.";
+          poseReader.beginCalibration();
+          calibration = 0;
+          return;
+        }
+        startRun();
+      }
+
+      function startRun() {
+        mode = "playing";
+        session.score = 0;
+        session.ringScore = 0;
+        session.distance = 0;
+        session.combo = 0;
+        session.cause = "";
+        flight.reset();
+        // the canyon centreline does not start at x=0, so spawn on it rather than beside it
+        flight.pos.set(centerX(0), floorY(0) + 78, 0);
+        canyon.reset();
+        rings.reset();
+        bird.reset();
+        chase.reset(flight);
+        prevPos.copy(flight.pos);
+        accumulator = 0;
+        lostTimer = 0;
+        hud.reset();
+        hud.show(true);
+        setScreen(false);
+      }
+
+      /**
+       * Walking out of frame should not cost you a run. The flight freezes until the
+       * player is back, then hands control over with a countdown rather than dropping
+       * them straight back into a dive.
+       */
+      function pauseRun() {
+        mode = "paused";
+        resumeTimer = RESUME_DELAY;
+        el.card.innerHTML = `
+          <h1 class="title" style="font-size:38px">Paused</h1>
+          <p class="status" id="pause-hint">Step back into view of the camera.</p>
+          <p class="footnote">The run is waiting for you — nothing is lost.</p>`;
+        setScreen(true);
+      }
+
+      function resumeRun() {
+        mode = "playing";
+        accumulator = 0;
+        lostTimer = 0;
+        prevPos.copy(flight.pos);
+        setScreen(false);
+      }
+
+      function showGameOver() {
+        mode = "dead";
+        session.best = Math.max(session.best, session.score);
+        const cause = {
+          wall: "Clipped the canyon wall",
+          ground: "Hit the deck",
+          rock: "Met a rock spire",
+        }[session.cause] ?? "Down";
+
+        el.card.innerHTML = `
+          <p class="subtitle" style="margin-bottom:6px">${cause}</p>
+          <div class="score-final">${session.score.toLocaleString()}</div>
+          <div class="score-rows">
+            <div><b>${Math.round(session.distance)}m</b>distance</div>
+            <div><b>${rings.hits}</b>rings</div>
+            <div><b>${rings.bestCombo}×</b>best chain</div>
+            <div><b>${session.best.toLocaleString()}</b>best run</div>
+          </div>
+          <button class="btn" id="again-btn">Fly again</button>
+          <p class="footnote">Chain rings without missing to multiply the score. Glide to get your wind back.</p>`;
+        $("again-btn").addEventListener("click", startRun);
+        setScreen(true);
+      }
+
+      /* ------------------------------------------------------------------ *
+       * boot
+       * ------------------------------------------------------------------ */
+
+      /** Turns a getUserMedia failure into something a person can act on. */
+      function cameraProblem(err) {
+        switch (err?.name) {
+          case "NotAllowedError":
+          case "SecurityError":
+            return `Camera access was blocked. Two places can block it:
+              the <b>camera icon in your browser's address bar</b>, and on Windows,
+              <b>Settings → Privacy &amp; security → Camera</b>, where both
+              "Camera access" and "Let desktop apps access your camera" must be on.`;
+          case "NotFoundError":
+          case "OverconstrainedError":
+            return "No camera found. Plug one in or pick a different one below, then try again.";
+          case "NotReadableError":
+          case "AbortError":
+            return `The camera could not be opened. Usually another app is holding it
+              (Teams, Zoom, the Camera app) — close that and try again. On Windows it can
+              also be blocked under <b>Settings → Privacy &amp; security → Camera</b>.`;
+          default:
+            return `Couldn't start the camera (${err?.name ?? err?.message ?? "unknown error"}). Try again.`;
+        }
+      }
+
+      /** "granted" | "prompt" | "denied" — Firefox and Safari don't expose this. */
+      async function permissionState() {
+        try {
+          const status = await navigator.permissions.query({ name: "camera" });
+          // if they flip the switch in the address bar, pick it up without a reload
+          status.onchange = () => {
+            if (status.state === "granted" && !cameraReady) grantCamera();
+          };
+          return status.state;
+        } catch {
+          return "prompt";
+        }
+      }
+
+      async function boot() {
+        paintPoseArt();
+        if (new URLSearchParams(location.search).has("keys")) {
+          useKeyboard();
+          return;
+        }
+
+        // getUserMedia simply does not exist outside a secure origin, which is the
+        // usual reason the camera "does nothing" when the page is opened over a LAN IP
+        if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+          showBlocker(
+            "Not a secure page",
+            `Browsers only allow camera access over <b>https://</b> or <b>localhost</b>.
+             This page is on <b>${location.origin}</b>. Open it as
+             <b>http://localhost:${location.port || 80}</b> instead.`,
+          );
+          return;
+        }
+
+        try {
+          await tracker.loadModel();
+        } catch (err) {
+          console.error(err);
+          showBlocker("Pose model failed to load", "Reload the page to try again.");
+          return;
+        }
+
+        // Permission is its own first step: ask for it here, on the title screen,
+        // so the camera is proven working before anyone commits to a run.
+        const state = await permissionState();
+        if (state === "granted") grantCamera();
+        else if (state === "denied") showCameraError({ name: "NotAllowedError" });
+        else askForCamera();
+      }
+
+      function askForCamera() {
+        mode = "title";
+        el.status.className = "status";
+        el.status.innerHTML = "This game is played with your body, so it needs your camera.";
+        el.button.textContent = "Allow camera";
+        el.button.disabled = false;
+        el.button.onclick = grantCamera;
+      }
+
+      /** Acquire the camera and leave it running, with the preview visible. */
+      async function grantCamera(deviceId) {
+        el.button.disabled = true;
+        el.status.className = "status";
+        el.status.textContent = "Waiting for camera permission…";
+        try {
+          await tracker.startCamera(deviceId);
+          cameraReady = true;
+          restoreTitleCard();
+          el.cam.hidden = false;
+          lastStatus = "";
+          mode = "title";
+          setScreen(true);
+          el.button.textContent = "Start";
+          el.button.disabled = false;
+          el.button.onclick = showCalibration;
+          buildCameraPicker();
+        } catch (err) {
+          console.error("camera failed:", err);
+          cameraReady = false;
+          showCameraError(err);
+        }
+      }
+
+      function useKeyboard() {
+        reader = keyboard;
+        tracker.stopCamera();
+        cameraReady = false;
+        restoreTitleCard();
+        el.cam.hidden = true;
+        el.status.className = "status warn";
+        el.status.innerHTML =
+          "Keyboard mode — <b>space</b> to flap, <b>shift</b> to dive, <b>A</b>/<b>D</b> to steer.";
+        el.button.textContent = "Play with keys";
+        el.button.disabled = false;
+        el.button.onclick = startRun;
+        mode = "title";
+      }
+
+      /** Only shown when there is an actual choice to make. */
+      async function buildCameraPicker() {
+        const cams = await tracker.listCameras();
+        const picker = $("cam-picker");
+        if (!picker) return;
+        if (cams.length < 2) {
+          picker.hidden = true;
+          return;
+        }
+        picker.hidden = false;
+        picker.innerHTML = cams
+          .map(
+            (c, i) =>
+              `<option value="${c.deviceId}"${c.deviceId === tracker.deviceId ? " selected" : ""}>${
+                c.label || `Camera ${i + 1}`
+              }</option>`,
+          )
+          .join("");
+        picker.onchange = () => grantCamera(picker.value);
+      }
+
+      function showCameraError(err) {
+        mode = "title";
+        cameraReady = false;
+        el.cam.hidden = true;
+        el.card.innerHTML = `
+          <h1 class="title" style="font-size:40px">Camera needed</h1>
+          <p class="status error" style="max-width:540px;margin:14px auto 26px">${cameraProblem(err)}</p>
+          <button class="btn" id="retry-btn">Try again</button>
+          <select class="picker" id="cam-picker" hidden></select>
+          <p class="footnote">
+            This game is played with your body — the camera is the controller.
+            <button class="linkish" id="keys-btn">Use the keyboard instead</button>
+          </p>`;
+        $("retry-btn").onclick = () => grantCamera();
+        $("keys-btn").onclick = () => {
+          useKeyboard();
+          startRun();
+        };
+        buildCameraPicker();
+        setScreen(true);
+      }
+
+      /** A dead end the player cannot retry out of — wrong origin, or no model. */
+      function showBlocker(title, html) {
+        mode = "title";
+        el.card.innerHTML = `
+          <h1 class="title" style="font-size:40px">${title}</h1>
+          <p class="status error" style="max-width:540px;margin:14px auto 26px">${html}</p>
+          <button class="btn" id="keys-btn">Play with the keyboard</button>`;
+        $("keys-btn").onclick = () => {
+          useKeyboard();
+          startRun();
+        };
+        setScreen(true);
+      }
+
+      addEventListener("keydown", (e) => {
+        if (e.code === "KeyR" && (mode === "playing" || mode === "paused" || mode === "dead")) startRun();
+      });
+
+      /* ------------------------------------------------------------------ *
+       * loop
+       * ------------------------------------------------------------------ */
+
+      let last = performance.now();
+      const PHYSICS_STEP = 1 / 120;
+      let accumulator = 0;
+
+      function frame(now) {
+        requestAnimationFrame(frame);
+        const dt = Math.min((now - last) / 1000, 0.05);
+        last = now;
+        const time = now / 1000;
+
+        if (reader === poseReader && tracker.ready) {
+          lastResult = tracker.poll(now);
+        }
+
+        let gesture = { tracked: false, flapActivity: 0, steer: 0, tuck: 0, glide: 0, hint: "" };
+
+        if (mode === "calibrating") {
+          const quality = poseReader.sampleCalibration(lastResult);
+          calibration = Math.max(0, calibration + (quality > 0.35 ? dt : -dt * 1.5));
+          const ring = $("cal-ring");
+          if (ring) {
+            const pct = Math.min(calibration / CALIBRATION_SECONDS, 1) * 100;
+            ring.style.background = `conic-gradient(var(--flap) ${pct}%, rgba(247,239,228,0.12) 0)`;
+            $("cal-count").textContent = Math.max(1, Math.ceil(CALIBRATION_SECONDS - calibration));
+            $("cal-hint").textContent = !lastResult
+              ? "I can't see anyone yet — step into view of the camera."
+              : quality > 0.35
+                ? "Got you. Hold it…"
+                : "Arms straight out to the sides, level with your shoulders.";
+          }
+          if (calibration >= CALIBRATION_SECONDS) finishCalibration();
+        } else if (mode === "playing" || mode === "dying" || mode === "paused") {
+          gesture = reader.update(lastResult, dt);
+        } else if (mode === "title" && cameraReady && el.status.isConnected) {
+          // prove the camera works before anyone commits to a run
+          const text = lastResult
+            ? "Camera is live and I can see you. Ready when you are."
+            : "Camera is live — step back until your whole upper body is in the box.";
+          if (text !== lastStatus) {
+            lastStatus = text;
+            el.status.className = lastResult ? "status" : "status warn";
+            el.status.textContent = text;
+          }
+        }
+
+        // losing the player mid-run pauses instead of letting the bird fly on blind
+        if (mode === "playing" && reader === poseReader) {
+          lostTimer = gesture.tracked ? 0 : lostTimer + dt;
+          if (lostTimer > LOST_PAUSE) pauseRun();
+        }
+
+        if (mode === "paused") {
+          const hint = $("pause-hint");
+          if (gesture.tracked) {
+            resumeTimer -= dt;
+            if (hint) hint.textContent = `Got you. Resuming in ${Math.ceil(resumeTimer)}…`;
+            if (resumeTimer <= 0) resumeRun();
+          } else {
+            resumeTimer = RESUME_DELAY;
+            if (hint) hint.textContent = "Step back into view of the camera.";
+          }
+        }
+
+        if (mode === "playing") {
+          prevPos.copy(flight.pos);
+
+          // Physics runs on a fixed step so the flight model feels identical at 30, 60
+          // or 144fps, and so a fast dive is collision-checked several times per frame
+          // instead of teleporting past a spire.
+          accumulator = Math.min(accumulator + dt, 0.2);
+          let step = gesture;
+          let hit = null;
+          while (accumulator >= PHYSICS_STEP && !hit) {
+            flight.update(PHYSICS_STEP, step, canyon);
+            flight.vel.y -= canyon.ceilingPush(flight.pos) * PHYSICS_STEP;
+            accumulator -= PHYSICS_STEP;
+            // the flap is an impulse, so it must land exactly once however many steps run
+            if (step.flap) step = { ...step, flap: null };
+            hit = canyon.collide(flight.pos);
+          }
+
+          const d = distanceOf(flight.pos.z);
+          canyon.ensure(d);
+          session.distance = Math.max(session.distance, d);
+          session.altitude = flight.pos.y - floorY(d);
+
+          const event = rings.update(dt, prevPos, flight.pos, time);
+          if (event?.hit) {
+            session.ringScore += RING_POINTS * Math.min(event.combo, MAX_MULTIPLIER);
+          }
+          session.combo = rings.combo;
+          session.score = Math.floor(session.distance) + session.ringScore;
+
+          if (hit) {
+            session.cause = hit;
+            flight.alive = false;
+            mode = "dying";
+            crashTimer = 0;
+            gfx.renderer.toneMappingExposure = 2.1;
+          }
+        } else if (mode === "dying") {
+          crashTimer += dt;
+          flight.vel.y -= 26 * dt;
+          flight.vel.multiplyScalar(1 - dt * 1.2);
+          flight.pos.addScaledVector(flight.vel, dt);
+          flight.bank += dt * 4;
+          gfx.renderer.toneMappingExposure += (1.05 - gfx.renderer.toneMappingExposure) * (1 - Math.exp(-dt * 5));
+          if (crashTimer > 1.1) {
+            hud.show(false);
+            showGameOver();
+          }
+        }
+
+        if (mode === "playing" || mode === "paused" || mode === "dying" || mode === "dead") {
+          const speedNorm = (flight.speed - FLIGHT.minSpeed) / (FLIGHT.maxSpeed - FLIGHT.minSpeed);
+          bird.update(dt, flight, gesture);
+          chase.update(dt, flight, Math.max(0, speedNorm));
+          gfx.dust.update(flight.pos, gfx.camera, gfx.renderer);
+          gfx.clouds.update(flight.pos);
+          if (mode === "playing") hud.update(dt, flight, gesture, session);
+        } else {
+          // slow drift down the canyon behind the menu
+          flight.pos.z -= 26 * dt;
+          const d = distanceOf(flight.pos.z);
+          canyon.ensure(d);
+          flight.pos.x = centerX(d) + Math.sin(time * 0.25) * 14;
+          flight.pos.y = floorY(d) + 62 + Math.sin(time * 0.4) * 7;
+          flight.vel.set(Math.sin(time * 0.3) * 4, Math.sin(time * 0.4) * 2, -26);
+          flight.bank = Math.sin(time * 0.25) * 0.22;
+          rings.preview(flight.pos, time);
+          bird.update(dt, flight, gesture);
+          chase.update(dt, flight, 0.15);
+          gfx.dust.update(flight.pos, gfx.camera, gfx.renderer);
+          gfx.clouds.update(flight.pos);
+        }
+
+        gfx.follow.position.copy(gfx.camera.position);
+
+        if (reader === poseReader && tracker.ready) {
+          drawOverlay(el.overlay, lastResult, gesture);
+        }
+
+        gfx.renderer.render(gfx.scene, gfx.camera);
+      }
+
+      boot();
+      requestAnimationFrame(frame);
+
+    </script>
+  </body>
+</html>
