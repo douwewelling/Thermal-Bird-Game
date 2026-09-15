@@ -119,6 +119,71 @@
         display: none;
       }
 
+      /* standing reminder that nothing here can end the run */
+      .roam-badge {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 3px 12px;
+        border: 1px solid rgba(143, 227, 234, 0.45);
+        border-radius: 999px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--glide);
+      }
+
+      .roam-badge[hidden] {
+        display: none;
+      }
+
+      /* one line, then it fades — a scrape should be noted, not dwelt on. The fade is
+         a keyframe animation rather than a per-frame timer so that it always finishes,
+         even if the run pauses or ends halfway through it. */
+      .recovery {
+        position: absolute;
+        top: 42%;
+        left: 50%;
+        font-family: var(--mono);
+        font-size: 15px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--glide);
+        text-shadow: 0 0 22px rgba(73, 198, 216, 0.55);
+        opacity: 0;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+
+      .recovery.show {
+        animation: recovery-flash 1.5s ease forwards;
+      }
+
+      @keyframes recovery-flash {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -40%);
+        }
+        12% {
+          opacity: 1;
+          transform: translate(-50%, -50%);
+        }
+        65% {
+          opacity: 1;
+          transform: translate(-50%, -50%);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -58%);
+        }
+      }
+
+      .recovery[hidden] {
+        display: none;
+      }
+
       .hud-left {
         position: absolute;
         left: 26px;
@@ -167,6 +232,27 @@
 
       .gauge-alt {
         background: linear-gradient(90deg, rgba(73, 198, 216, 0.45), var(--glide));
+      }
+
+      /* off-screen gate pointer: sits on a ring around the centre of the screen and
+         swings to whichever edge the next gate is hiding behind */
+      .guide {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 34px;
+        height: 34px;
+        margin: -17px 0 0 -17px;
+        color: var(--flap);
+        opacity: 0.85;
+        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+        pointer-events: none;
+      }
+
+      .guide svg {
+        width: 100%;
+        height: 100%;
+        fill: currentColor;
       }
 
       .hud-modes {
@@ -445,6 +531,28 @@
         box-shadow: none;
       }
 
+      /* the second way in: quieter than the primary button, but a real choice */
+      .btn-ghost {
+        color: var(--glide);
+        background: none;
+        border: 1px solid rgba(143, 227, 234, 0.4);
+        box-shadow: none;
+        padding: 13px 34px;
+      }
+
+      .btn-ghost:hover:not(:disabled) {
+        border-color: rgba(143, 227, 234, 0.85);
+        box-shadow: 0 10px 30px rgba(73, 198, 216, 0.18);
+      }
+
+      .btn-row {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
       .footnote {
         margin: 20px 0 0;
         font-size: 11px;
@@ -573,7 +681,11 @@
           <span class="stat-label">distance</span>
         </div>
         <div class="combo" id="combo" hidden><span id="combo-value">2</span>× chain</div>
+        <div class="roam-badge" id="roam-badge" hidden>roam</div>
       </div>
+
+      <!-- roam mode only: says what just happened instead of ending the run -->
+      <div class="recovery" id="recovery" hidden>caught you</div>
 
       <div class="hud-left">
         <div class="gauge">
@@ -588,6 +700,12 @@
           <div class="gauge-label">altitude</div>
           <div class="gauge-track"><div class="gauge-fill gauge-alt" id="alt-fill"></div></div>
         </div>
+      </div>
+
+      <!-- points back to the next gate once it leaves the screen: on a circuit you can
+           turn away from the line and lose it entirely, with nothing to steer back by -->
+      <div class="guide" id="guide" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L21 20 L12 15.5 L3 20 Z" /></svg>
       </div>
 
       <div class="hud-modes">
@@ -608,7 +726,7 @@
     <div id="screen" class="screen">
       <div class="screen-card" id="screen-card">
         <h1 class="title">Thermal</h1>
-        <p class="subtitle">Your arms are the wings. Fly the canyon.</p>
+        <p class="subtitle">Your arms are the wings. Fly the island.</p>
 
         <div class="moves">
           <div class="move">
@@ -634,14 +752,31 @@
         </div>
 
         <p class="status" id="status">Loading pose model…</p>
-        <button class="btn" id="primary-btn" disabled>Loading…</button>
+        <div class="btn-row">
+          <button class="btn" id="primary-btn" disabled>Loading…</button>
+          <button class="btn btn-ghost" id="roam-btn" disabled>Roam</button>
+        </div>
         <select class="picker" id="cam-picker" hidden></select>
-        <p class="footnote">Needs a webcam. Stand back far enough that your hips and both hands stay in frame.</p>
+        <p class="footnote">
+          Needs a webcam. Stand back far enough that your hips and both hands stay in frame.
+          <br />Roam is the same island with nothing to lose: no crashes, no stamina, just flying.
+        </p>
       </div>
     </div>
 
+    <!-- the three add-ons import "three" by bare name, so the map has to resolve it -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+        }
+      }
+    </script>
+
     <script type="module">
-      import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
+      import * as THREE from "three";
+      import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
       import {
         FilesetResolver,
         PoseLandmarker,
@@ -650,14 +785,16 @@
       /* ==========================================================================
        * Scene, sky, lighting, chase camera
        * ========================================================================== */
+      // bright midday over open water: the island has to read as green and sunlit,
+      // which the old sunset palette turned orange
       const PALETTE = {
-        zenith: new THREE.Color(0x4b2d7f),
-        upper: new THREE.Color(0xc4508f),
-        mid: new THREE.Color(0xff8a5c),
-        horizon: new THREE.Color(0xffc46b),
-        sun: new THREE.Color(0xfff4c9),
-        glow: new THREE.Color(0xffd98a),
-        haze: new THREE.Color(0xf2915e),
+        zenith: new THREE.Color(0x3f8ed6),
+        upper: new THREE.Color(0x63aae4),
+        mid: new THREE.Color(0x92c9ef),
+        horizon: new THREE.Color(0xcfe7f7),
+        sun: new THREE.Color(0xfffbe8),
+        glow: new THREE.Color(0xfff0c0),
+        haze: new THREE.Color(0xbcdcf0),
       };
 
       /**
@@ -707,7 +844,21 @@
         }
       `;
 
-      const SUN_DIR = new THREE.Vector3(0.34, 0.17, -1).normalize();
+      const SUN_DIR = new THREE.Vector3(0.42, 0.66, -0.72).normalize(); // high, it is midday now
+
+      /**
+       * How the view opens up with speed. It widens fast and closes slowly on
+       * purpose: matching rates would cancel the rush out again the moment you level
+       * off, and the asymmetry is what makes a dive feel like it cost something.
+       */
+      const VIEW = {
+        // three.js measures fov vertically, so these are roughly 1.4x as wide again
+        // on a landscape screen — past about 92 the edges go fisheye rather than fast
+        base: 70, // resting field of view — wide enough to keep the island in frame
+        rush: 22, // extra degrees at full speed
+        widen: 6.5, // how fast it opens...
+        settle: 2.2, // ...and how slowly it lets go
+      };
 
       function createScene(canvas) {
         const renderer = new THREE.WebGLRenderer({
@@ -722,9 +873,11 @@
         renderer.toneMappingExposure = 1;
 
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(PALETTE.haze.getHex(), 0.0021);
+        // thin enough that the far shore stays readable from the air, thick enough
+        // that the edge of the ocean disc dissolves before you can see it end
+        scene.fog = new THREE.FogExp2(PALETTE.haze.getHex(), 0.00048);
 
-        const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 4000);
+        const camera = new THREE.PerspectiveCamera(VIEW.base, 1, 0.5, 7000);
 
         /* ---- sky dome, parented to a group that follows the camera ---- */
         const follow = new THREE.Group();
@@ -751,14 +904,14 @@
         );
         sky.renderOrder = -1;
         follow.add(sky);
-        follow.add(buildDistantRidges());
 
         /* ---- light: one strong key plus flat fill, so the toon steps stay readable ---- */
-        scene.add(new THREE.HemisphereLight(0xffd9ab, 0x53306b, 0.85));
-        const sun = new THREE.DirectionalLight(0xfff0c4, 1.5);
+        // sky above, reflected green and blue from below
+        scene.add(new THREE.HemisphereLight(0xdcefff, 0x4a7a54, 0.85));
+        const sun = new THREE.DirectionalLight(0xfff6dc, 1.6);
         sun.position.copy(SUN_DIR).multiplyScalar(400);
         scene.add(sun);
-        const rim = new THREE.DirectionalLight(0x8a6ee0, 0.7);
+        const rim = new THREE.DirectionalLight(0x9fc8e8, 0.55);
         rim.position.set(-1, 0.55, 0.6).multiplyScalar(300);
         scene.add(rim);
 
@@ -778,58 +931,15 @@
         return { renderer, scene, camera, follow, dust, clouds };
       }
 
-      /**
-       * Flat silhouetted mesas far beyond the canyon walls; they never get closer.
-       * Unlit on purpose — a cut-paper backdrop behind the lit world.
-       */
-      function buildDistantRidges() {
-        const group = new THREE.Group();
-        const pos = [];
-        const col = [];
-        // each layer is one solid colour, like stacked paper cut-outs
-        const layers = [
-          { radius: 820, height: 190, color: new THREE.Color(0x8b3f6e) },
-          { radius: 1180, height: 300, color: new THREE.Color(0xa8527e) },
-          { radius: 1620, height: 430, color: new THREE.Color(0xc2688c) },
-        ];
-
-        layers.forEach((layer, li) => {
-          const count = 30 + li * 9;
-          for (let i = 0; i < count; i++) {
-            const a0 = (i / count) * Math.PI * 2;
-            const a1 = ((i + 1.35) / count) * Math.PI * 2;
-            const mid = (a0 + a1) / 2;
-            const h = layer.height * (0.4 + Math.abs(Math.sin(i * 12.9898 + li * 4.1)) * 0.95);
-            const p = (a, y) =>
-              new THREE.Vector3(Math.cos(a) * layer.radius, y - 150, Math.sin(a) * layer.radius);
-            for (const v of [p(a0, 0), p(a1, 0), p(mid, h)]) {
-              pos.push(v.x, v.y, v.z);
-              col.push(layer.color.r, layer.color.g, layer.color.b);
-            }
-          }
-        });
-
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-        geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-        const mesh = new THREE.Mesh(
-          geo,
-          new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: false }),
-        );
-        mesh.renderOrder = -1;
-        group.add(mesh);
-        return group;
-      }
-
-      /** Puffy cartoon clouds built from overlapping blobs, wrapping around the bird. */
       class Clouds {
-        constructor(scene, count = 16) {
-          this.span = new THREE.Vector3(520, 220, 900);
+        constructor(scene, count = 26) {
+          this.span = new THREE.Vector3(1100, 240, 1100);
           this.group = new THREE.Group();
           scene.add(this.group);
 
           const blob = new THREE.IcosahedronGeometry(1, 1);
-          const shades = [0xfff2f6, 0xffd9e6, 0xffc0d4];
+          // white now that the sky is blue; the old pink read as sunset cloud
+          const shades = [0xffffff, 0xf4fbff, 0xe6f3fd];
           this.puffs = [];
 
           for (let i = 0; i < count; i++) {
@@ -864,7 +974,7 @@
             return c + d;
           };
           // clouds sit above the bird, not in its face
-          const high = center.y + 95;
+          const high = center.y + 150;
           for (const c of this.puffs) {
             c.position.x = wrap(c.position.x, center.x, this.span.x);
             c.position.y = wrap(c.position.y, high, this.span.y);
@@ -961,7 +1071,7 @@
           this.pos = new THREE.Vector3(0, 70, 30);
           this.look = new THREE.Vector3();
           this.up = new THREE.Vector3(0, 1, 0);
-          this.fov = 62;
+          this.fov = VIEW.base;
           this._desired = new THREE.Vector3();
           this._dir = new THREE.Vector3();
           this._scratch = new THREE.Vector3();
@@ -1015,24 +1125,25 @@
           this.camera.up.copy(this.up);
           this.camera.lookAt(target);
 
-          const targetFov = 60 + speedNorm * 22;
-          this.fov += (targetFov - this.fov) * (1 - Math.exp(-dt * 4));
+          const targetFov = VIEW.base + speedNorm * VIEW.rush;
+          const rate = targetFov > this.fov ? VIEW.widen : VIEW.settle;
+          this.fov += (targetFov - this.fov) * (1 - Math.exp(-dt * rate));
           this.camera.fov = this.fov;
           this.camera.updateProjectionMatrix();
         }
       }
-
       /* ==========================================================================
-       * The canyon: field functions, mesh streaming, collision
+       * The island: height field, terrain mesh, forest, collision
        * ========================================================================== */
-      const CANYON = {
-        chunkLength: 240,
-        chunkCount: 7,
-        step: 8, // z resolution of the wall mesh
-        wallLevels: 7,
-        wallHeight: 165,
-        ceilingFraction: 0.62, // of the wall height — keeps play down inside the canyon
-        clearance: 2.4, // how close the bird may get before it counts as a hit
+      const ISLAND = {
+        radius: 620, // centre to waterline
+        peak: 330, // height of the mountain top
+        mountain: 0.55, // share of the radius the mountain takes up
+        land: 44, // height of the rolling ground around it
+        segments: 190, // terrain grid resolution — lower means chunkier facets
+        clearance: 3.2, // how close the bird may get before it counts as a hit
+        ceiling: 470, // soft lid: flap above this and the air fights back
+        fence: 820, // ...and the same out to sea, so the island stays in sight
       };
 
       /* ---------- deterministic field functions (no allocation, no state) ---------- */
@@ -1056,268 +1167,293 @@
         return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
       };
 
-      /** Distance flown, in metres. The bird travels toward -Z, so this is positive. */
-      const distanceOf = (z) => -z;
-
-      const centerX = (d) =>
-        36 * Math.sin(d * 0.0061) + 20 * Math.sin(d * 0.0142 + 1.7) + 8 * Math.sin(d * 0.0309 + 0.4);
-
-      const floorY = (d) =>
-        11 * Math.sin(d * 0.0087 + 2.2) + 6 * Math.sin(d * 0.0191 + 0.9) + 3 * Math.sin(d * 0.047);
-
-      /** Canyon narrows as you get further out — that is the difficulty curve. */
-      const halfWidth = (d) => {
-        const tighten = Math.min(d / 7000, 1);
-        const base = 54 - 22 * tighten;
-        return base + 9 * Math.sin(d * 0.0113 + 3.1) + 4 * Math.sin(d * 0.026 + 1.2);
-      };
-
-      /* ---------- spires and thermals, placed on a deterministic lattice ---------- */
-
-      const SPIRE_SPACING = 155;
-      const THERMAL_SPACING = 340;
-
-      function spireAt(index) {
-        const d = index * SPIRE_SPACING + 60;
-        if (d < 700) return null; // give the player a calm opening stretch
-        const r = hash(index * 7.3, 19.1);
-        if (r > 0.72) return null;
-        const w = halfWidth(d);
-        const lateral = (hash(index * 3.1, 5.7) * 1.7 - 0.85) * w;
-        return {
-          d,
-          x: centerX(d) + lateral,
-          z: -d,
-          radius: 5 + hash(index * 11.7, 2.3) * 5,
-          base: floorY(d) - 4,
-          height: 42 + hash(index * 2.9, 31.4) * 70,
-        };
+      /** Stacked noise: broad shapes plus progressively finer detail. */
+      function fbm(x, y, octaves = 4) {
+        let sum = 0;
+        let amp = 1;
+        let tot = 0;
+        for (let i = 0; i < octaves; i++) {
+          sum += noise(x, y) * amp;
+          tot += amp;
+          amp *= 0.5;
+          x *= 2.03;
+          y *= 2.03;
+        }
+        return sum / tot;
       }
 
-      function thermalAt(index) {
-        const d = index * THERMAL_SPACING + 220;
-        const w = halfWidth(d);
-        return {
-          d,
-          x: centerX(d) + (hash(index * 13.7, 8.2) * 1.2 - 0.6) * w,
-          y: floorY(d) + 30,
-          z: -d,
-          radius: 17,
-          strength: 15,
-        };
-      }
-
-      /* ---------- mesh building ---------- */
-
-      // four bold bands from shaded base to sunlit rim, rather than a smooth ramp
-      const COLOR = {
-        shadow: new THREE.Color(0x532a6b),
-        rock: new THREE.Color(0xa8414f),
-        warm: new THREE.Color(0xdf6b36),
-        rim: new THREE.Color(0xf2a049),
-        cap: new THREE.Color(0xffc46b),
-        sand: new THREE.Color(0xeda85f),
-        sandDark: new THREE.Color(0xa85a36),
+      const smoothstep01 = (a, b, v) => {
+        const t = Math.min(Math.max((v - a) / (b - a), 0), 1);
+        return t * t * (3 - 2 * t);
       };
 
-      class MeshBuilder {
-        constructor() {
-          this.pos = [];
-          this.col = [];
+      /**
+       * The height field of the island — the single source of truth. The terrain
+       * mesh, the trees, the ring course and collision all read this same function,
+       * so nothing can drift out of agreement with the ground you can see.
+       * Returns metres; below 0 is under water.
+       */
+      function groundAt(x, z) {
+        const r = Math.hypot(x, z) / ISLAND.radius;
+
+        // the coastline wanders, otherwise the island is a perfect circle
+        const ang = Math.atan2(z, x);
+        const wobble = (fbm(Math.cos(ang) * 1.7 + 11, Math.sin(ang) * 1.7 + 7, 3) - 0.5) * 0.17;
+        const shore = 1 + wobble;
+
+        // 1 on land, 0 past the waterline — this masks everything else
+        const land = 1 - smoothstep01(shore - 0.22, shore, r);
+
+        // the mountain: a rounded cone, not a spike
+        const m = Math.min(Math.max(1 - r / ISLAND.mountain, 0), 1);
+        const mountain = ISLAND.peak * m * m * (3 - 2 * m) * (0.55 + 0.45 * m);
+
+        const plain = ISLAND.land * land;
+
+        // relief: coarse ribs down the flanks, fine grain on the beach
+        const ridges = (fbm(x * 0.0023 + 3.1, z * 0.0023 + 8.4, 4) - 0.5) * 112 * land;
+        const gullies = (fbm(x * 0.0063 + 21, z * 0.0063 + 5, 2) - 0.5) * 44 * m;
+        const grain = (fbm(x * 0.012, z * 0.012, 3) - 0.5) * 12 * land;
+
+        const h = (mountain + plain) * land + ridges * (0.35 + 0.65 * m) + gullies + grain;
+
+        // outside the coastline the seabed keeps falling, so there is no floating rim
+        return r > shore ? h - (r - shore) * 900 : h;
+      }
+
+      /** Slope steepness at (x, z), as the length of the height gradient. */
+      function slopeAt(x, z, step = 14) {
+        const dx = groundAt(x + step, z) - groundAt(x - step, z);
+        const dz = groundAt(x, z + step) - groundAt(x, z - step);
+        return Math.hypot(dx, dz) / (2 * step);
+      }
+
+      /* ---------- terrain ---------- */
+
+      // sand, grass, forest, rock, bare summit
+      const BANDS = [
+        { h: 4, color: new THREE.Color(0xe6c893) },
+        { h: 17, color: new THREE.Color(0xf2dcac) },
+        { h: 48, color: new THREE.Color(0x86c25f) },
+        { h: 168, color: new THREE.Color(0x5d9c4a) },
+        { h: 262, color: new THREE.Color(0x8d8578) },
+        { h: 9999, color: new THREE.Color(0xe8e4dc) },
+      ];
+
+      function terrainColor(h, target) {
+        for (let i = 0; i < BANDS.length; i++) {
+          if (h <= BANDS[i].h) {
+            const lo = i === 0 ? -40 : BANDS[i - 1].h;
+            const from = i === 0 ? BANDS[0].color : BANDS[i - 1].color;
+            return target.copy(from).lerp(BANDS[i].color, smoothstep01(lo, BANDS[i].h, h));
+          }
         }
-        tri(a, b, c, ca, cb, cc) {
-          this.pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
-          this.col.push(ca.r, ca.g, ca.b, cb.r, cb.g, cb.b, cc.r, cc.g, cc.b);
-        }
-        quad(a, b, c, d, ca, cb, cc, cd) {
-          this.tri(a, b, c, ca, cb, cc);
-          this.tri(a, c, d, ca, cc, cd);
-        }
-        build() {
-          const g = new THREE.BufferGeometry();
-          g.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
-          g.setAttribute("color", new THREE.Float32BufferAttribute(this.col, 3));
-          g.computeVertexNormals();
-          return g;
-        }
+        return target.copy(BANDS[BANDS.length - 1].color);
       }
 
       /**
-       * Quantised into flat strata. Snapping `t` to a handful of steps is what gives
-       * the walls their drawn, banded look instead of an airbrushed gradient.
+       * A plane whose every vertex is pushed up by groundAt(). Vertex colours plus
+       * flat facets keep it in the same drawn register as the bird.
        */
-      const BANDS = 7;
-      const wallColor = (t, shade) => {
-        const q = Math.round(t * BANDS) / BANDS;
+      function buildTerrain() {
+        const size = ISLAND.radius * 2.6;
+        const geo = new THREE.PlaneGeometry(size, size, ISLAND.segments, ISLAND.segments);
+        geo.rotateX(-Math.PI / 2);
+
+        const pos = geo.attributes.position;
+        const colors = new Float32Array(pos.count * 3);
         const c = new THREE.Color();
-        if (q < 0.42) c.copy(COLOR.shadow).lerp(COLOR.rock, q / 0.42);
-        else if (q < 0.72) c.copy(COLOR.rock).lerp(COLOR.warm, (q - 0.42) / 0.3);
-        else if (q < 0.93) c.copy(COLOR.warm).lerp(COLOR.rim, (q - 0.72) / 0.21);
-        else c.copy(COLOR.rim).lerp(COLOR.cap, (q - 0.93) / 0.07);
-        return c.multiplyScalar(shade);
-      };
+        for (let i = 0; i < pos.count; i++) {
+          const y = groundAt(pos.getX(i), pos.getZ(i));
+          pos.setY(i, y);
+          terrainColor(y, c);
+          colors[i * 3] = c.r;
+          colors[i * 3 + 1] = c.g;
+          colors[i * 3 + 2] = c.b;
+        }
+        geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        geo.computeVertexNormals();
 
-      /** Wall surfaces bulge in and out. `t` is height up the wall, 0..1. */
-      const wallBulge = (d, t) => noise(d * 0.021, t * 3.4) * 9 - 4.5 + noise(d * 0.07, t * 8) * 3;
+        return new THREE.Mesh(
+          geo,
+          new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: TOON }),
+        );
+      }
 
-      const heightToT = (d, y) => {
-        const raw = (y - floorY(d)) / CANYON.wallHeight;
-        return raw <= 0 ? 0 : Math.min(Math.pow(raw, 1 / 1.15), 1);
+      /** One flat disc of sea, wide enough that the horizon dissolves into the haze. */
+      function buildOcean() {
+        const mesh = new THREE.Mesh(
+          new THREE.CircleGeometry(4200, 96),
+          new THREE.MeshBasicMaterial({ color: 0x2d87bd, transparent: true, opacity: 0.94 }),
+        );
+        mesh.rotation.x = -Math.PI / 2;
+        return mesh;
+      }
+
+      /* ---------- forest ---------- */
+
+      const TREES = {
+        spacing: 58, // fixed distance between trees, in metres
+        inner: 95, // nothing grows near the summit
+        outer: 590,
+        minGround: 22, // above the beach
+        maxGround: 210, // the treeline on the flank
+        maxSlope: 0.9,
+        jitter: 0.55, // how far a tree may stray off its grid point (0 = strict rings)
+        trunk: 17,
+        height: 47, // trunk plus canopy, less the sink into the ground
+        canopy: 15, // canopy radius, likewise
       };
 
       /**
-       * Half-width of the gap at a given height — the same surface the mesh draws,
-       * so what the player sees is what they hit.
+       * One tree as one geometry: a brown cylinder trunk plus three stacked cones.
+       * The colours live in the vertices, so the whole forest fits in a single
+       * InstancedMesh with a single material.
        */
-      const gapAt = (d, y) => {
-        const t = heightToT(d, y);
-        return halfWidth(d) + Math.pow(t, 1.6) * 16 + wallBulge(d, t) * (0.25 + t);
-      };
-
-      function buildChunk(startD) {
-        const mb = new MeshBuilder();
-        const steps = Math.round(CANYON.chunkLength / CANYON.step);
-        const levels = CANYON.wallLevels;
-
-        const wallPoint = (d, side, li) => {
-          const t = li / (levels - 1);
-          const y = floorY(d) + Math.pow(t, 1.15) * CANYON.wallHeight;
-          return new THREE.Vector3(centerX(d) + side * gapAt(d, y), y, -d);
+      function buildTreeGeometry() {
+        const parts = [];
+        const paint = (geo, hex) => {
+          const n = geo.attributes.position.count;
+          const c = new THREE.Color(hex);
+          const arr = new Float32Array(n * 3);
+          for (let i = 0; i < n; i++) {
+            arr[i * 3] = c.r;
+            arr[i * 3 + 1] = c.g;
+            arr[i * 3 + 2] = c.b;
+          }
+          geo.setAttribute("color", new THREE.BufferAttribute(arr, 3));
+          return geo;
         };
 
-        for (let i = 0; i < steps; i++) {
-          const d0 = startD + i * CANYON.step;
-          const d1 = d0 + CANYON.step;
+        const trunk = new THREE.CylinderGeometry(2.1, 3.4, TREES.trunk, 6);
+        trunk.translate(0, TREES.trunk / 2, 0);
+        parts.push(paint(trunk, 0x6b4526));
 
-          for (const side of [-1, 1]) {
-            for (let li = 0; li < levels - 1; li++) {
-              const t = li / (levels - 1);
-              const shade = 0.80 + noise(d0 * 0.05, li * 2.1) * 0.24;
-              const a = wallPoint(d0, side, li);
-              const b = wallPoint(d1, side, li);
-              const c = wallPoint(d1, side, li + 1);
-              const e = wallPoint(d0, side, li + 1);
-              const cl = wallColor(t, shade);
-              const cu = wallColor((li + 1) / (levels - 1), shade);
-              if (side < 0) mb.quad(a, b, c, e, cl, cl, cu, cu);
-              else mb.quad(a, e, c, b, cl, cu, cu, cl);
-            }
-          }
-
-          // canyon floor, dipped in the middle so it reads as a riverbed
-          const fl = (d, u) => {
-            const w = halfWidth(d);
-            return new THREE.Vector3(
-              centerX(d) + u * w,
-              floorY(d) - (1 - u * u) * 4 + noise(d * 0.04, u * 4) * 3,
-              -d,
-            );
-          };
-          const cols = 5;
-          for (let c = 0; c < cols; c++) {
-            const u0 = -1 + (2 * c) / cols;
-            const u1 = -1 + (2 * (c + 1)) / cols;
-            const shade = 0.82 + noise(d0 * 0.06, c * 3.3) * 0.22;
-            const col = COLOR.sandDark.clone().lerp(COLOR.sand, 1 - Math.abs((u0 + u1) / 2)).multiplyScalar(shade);
-            mb.quad(fl(d0, u0), fl(d0, u1), fl(d1, u1), fl(d1, u0), col, col, col, col);
-          }
+        // wide to narrow: an unmistakable conifer silhouette at any distance
+        const tiers = [
+          { r: 15, h: 21, y: TREES.trunk - 4, color: 0x3f7a39 },
+          { r: 11.5, h: 18, y: TREES.trunk + 6, color: 0x4a8c40 },
+          { r: 7.5, h: 15, y: TREES.trunk + 16, color: 0x57a04a },
+        ];
+        for (const t of tiers) {
+          const cone = new THREE.ConeGeometry(t.r, t.h, 7);
+          cone.translate(0, t.y + t.h / 2, 0);
+          parts.push(paint(cone, t.color));
         }
-
-        // spires belong to whichever chunk contains them
-        const spires = [];
-        const i0 = Math.floor((startD - 60) / SPIRE_SPACING);
-        const i1 = Math.ceil((startD + CANYON.chunkLength - 60) / SPIRE_SPACING);
-        for (let i = i0; i <= i1; i++) {
-          const s = spireAt(i);
-          if (!s || s.d < startD || s.d >= startD + CANYON.chunkLength) continue;
-          spires.push(s);
-          const sides = 7;
-          for (let k = 0; k < sides; k++) {
-            const a0 = (k / sides) * Math.PI * 2;
-            const a1 = ((k + 1) / sides) * Math.PI * 2;
-            const rr = (a) => s.radius * (0.78 + noise(Math.cos(a) * 2 + 9, Math.sin(a) * 2) * 0.5);
-            const p = (a, h, shrink) =>
-              new THREE.Vector3(s.x + Math.cos(a) * rr(a) * shrink, s.base + h, s.z + Math.sin(a) * rr(a) * shrink);
-            const levelsS = 4;
-            for (let li = 0; li < levelsS; li++) {
-              const t0 = li / levelsS;
-              const t1 = (li + 1) / levelsS;
-              const sh0 = 1 - t0 * 0.55;
-              const sh1 = 1 - t1 * 0.55;
-              const shade = 0.80 + noise(k * 4.1, li * 2.7) * 0.24;
-              const c0 = wallColor(0.25 + t0 * 0.7, shade);
-              const c1 = wallColor(0.25 + t1 * 0.7, shade);
-              mb.quad(
-                p(a0, s.height * t0, sh0),
-                p(a1, s.height * t0, sh0),
-                p(a1, s.height * t1, sh1),
-                p(a0, s.height * t1, sh1),
-                c0, c0, c1, c1,
-              );
-            }
-          }
-        }
-
-        return { geometry: mb.build(), spires };
+        return mergeGeometries(parts);
       }
 
-      /* ---------- the streaming canyon ---------- */
+      /**
+       * Trees on concentric rings around the mountain: each ring sits TREES.spacing
+       * further out, and along every ring a tree stands every TREES.spacing metres.
+       * Each one drops onto the terrain, with scale, spin and tint varied so the
+       * grid underneath stops reading as a grid.
+       */
+      function plantForest() {
+        const spots = [];
+        for (let r = TREES.inner; r <= TREES.outer; r += TREES.spacing) {
+          const count = Math.max(1, Math.round((2 * Math.PI * r) / TREES.spacing));
+          const offset = (r / TREES.spacing) * 0.5; // stagger, or spokes appear
+          for (let i = 0; i < count; i++) {
+            const a = ((i + offset) / count) * Math.PI * 2;
+            const jx = (hash(i * 1.7, r * 0.13) - 0.5) * TREES.jitter * TREES.spacing;
+            const jz = (hash(r * 0.29, i * 2.3) - 0.5) * TREES.jitter * TREES.spacing;
+            const x = Math.cos(a) * r + jx;
+            const z = Math.sin(a) * r + jz;
+            const y = groundAt(x, z);
+            if (y < TREES.minGround || y > TREES.maxGround) continue;
+            if (slopeAt(x, z) > TREES.maxSlope) continue;
+            spots.push({
+              x,
+              y,
+              z,
+              // deterministic, so the forest looks the same on every reload
+              scale: 0.68 + hash(x * 0.37, z * 0.41) * 0.72,
+              turn: hash(z * 0.11, x * 0.19) * Math.PI * 2,
+              tilt: (hash(x * 0.53, z * 0.61) - 0.5) * 0.14,
+              tint: 0.86 + hash(x * 0.71, z * 0.83) * 0.3,
+            });
+          }
+        }
 
-      class Canyon {
+        const mesh = new THREE.InstancedMesh(
+          buildTreeGeometry(),
+          new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: TOON }),
+          spots.length,
+        );
+        mesh.frustumCulled = false;
+
+        const m = new THREE.Matrix4();
+        const q = new THREE.Quaternion();
+        const e = new THREE.Euler();
+        const p = new THREE.Vector3();
+        const s = new THREE.Vector3();
+        const tint = new THREE.Color();
+        spots.forEach((spot, i) => {
+          e.set(spot.tilt, spot.turn, spot.tilt * 0.8);
+          q.setFromEuler(e);
+          s.set(spot.scale, spot.scale * (0.9 + spot.tint * 0.15), spot.scale);
+          p.set(spot.x, spot.y - 1.5 * spot.scale, spot.z);
+          m.compose(p, q, s);
+          mesh.setMatrixAt(i, m);
+          mesh.setColorAt(i, tint.setScalar(spot.tint));
+        });
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.instanceColor.needsUpdate = true;
+
+        return { mesh, spots };
+      }
+
+      /* ---------- thermals ---------- */
+
+      const THERMAL_COUNT = 7;
+
+      /** Fixed columns of rising air, spread around the flank of the mountain. */
+      function buildThermals() {
+        const out = [];
+        for (let i = 0; i < THERMAL_COUNT; i++) {
+          const a = (i / THERMAL_COUNT) * Math.PI * 2 + hash(i * 5.1, 2.7) * 0.7;
+          const r = 230 + hash(i * 3.3, 9.1) * 260;
+          const x = Math.cos(a) * r;
+          const z = Math.sin(a) * r;
+          out.push({
+            x,
+            z,
+            y: groundAt(x, z) + 150,
+            radius: 78 + hash(i * 7.7, 1.3) * 40,
+            strength: 15 + hash(i * 2.9, 6.5) * 11,
+          });
+        }
+        return out;
+      }
+
+      class Island {
         constructor(scene) {
           this.scene = scene;
-          // geometry is non-indexed, so computeVertexNormals already gives flat facets
-          this.material = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: TOON });
-          this.chunks = [];
-          this.spires = [];
-          this.thermals = [];
+          this.terrain = buildTerrain();
+          this.terrain.frustumCulled = false;
+          scene.add(this.terrain);
+          scene.add(buildOcean());
 
-          for (let i = 0; i < CANYON.chunkCount; i++) {
-            const mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.material);
-            mesh.frustumCulled = false;
-            scene.add(mesh);
-            this.chunks.push({ mesh, startD: -Infinity, spires: [] });
-          }
-          this.reset();
+          const forest = plantForest();
+          scene.add(forest.mesh);
+          this.trees = forest.spots;
+
+          this.thermals = buildThermals();
+          this._push = new THREE.Vector3();
         }
 
-        reset() {
-          this.chunks.forEach((c) => (c.startD = -Infinity));
-          this.coveredFrom = null;
-          this.ensure(0);
-        }
+        reset() {}
 
-        /** Make sure chunks cover the stretch around the given distance. */
-        ensure(d) {
-          const first = Math.floor(d / CANYON.chunkLength) - 1;
-          if (first === this.coveredFrom) return;
-          this.coveredFrom = first;
-
-          for (let i = 0; i < CANYON.chunkCount; i++) {
-            const startD = (first + i) * CANYON.chunkLength;
-            const slot = this.chunks[((first + i) % CANYON.chunkCount + CANYON.chunkCount) % CANYON.chunkCount];
-            if (slot.startD === startD) continue;
-            slot.mesh.geometry.dispose();
-            const { geometry, spires } = buildChunk(startD);
-            slot.mesh.geometry = geometry;
-            slot.startD = startD;
-            slot.spires = spires;
-          }
-          this.spires = this.chunks.flatMap((c) => c.spires);
-
-          this.thermals = [];
-          const t0 = Math.floor((d - 400) / THERMAL_SPACING);
-          for (let i = t0; i <= t0 + 5; i++) if (i >= 0) this.thermals.push(thermalAt(i));
-        }
+        /** The island is built once, so there is nothing to stream in. */
+        ensure() {}
 
         updraftAt(pos) {
           for (const t of this.thermals) {
-            const dx = pos.x - t.x;
-            const dz = pos.z - t.z;
-            const r = Math.hypot(dx, dz);
+            const r = Math.hypot(pos.x - t.x, pos.z - t.z);
             if (r > t.radius) continue;
             const falloff = 1 - (r / t.radius) ** 2;
-            const height = 1 - Math.min(Math.abs(pos.y - t.y) / 70, 1);
+            const height = 1 - Math.min(Math.abs(pos.y - t.y) / 190, 1);
             return t.strength * falloff * height;
           }
           return 0;
@@ -1325,29 +1461,42 @@
 
         /** Returns null when clear, or a short reason string on impact. */
         collide(pos) {
-          const d = distanceOf(pos.z);
-          const lateral = pos.x - centerX(d);
+          if (pos.y < ISLAND.clearance) return "water";
+          if (pos.y < groundAt(pos.x, pos.z) + ISLAND.clearance) return "ground";
 
-          if (pos.y < floorY(d) + CANYON.clearance + 1.5) return "ground";
-          if (Math.abs(lateral) > gapAt(d, pos.y) - CANYON.clearance) return "wall";
-
-          for (const s of this.spires) {
-            if (Math.abs(pos.z - s.z) > s.radius + 12) continue;
-            const dist = Math.hypot(pos.x - s.x, pos.z - s.z);
-            if (dist < s.radius + CANYON.clearance && pos.y < s.base + s.height) return "rock";
+          // ~200 trees, so a flat scan beats any structure that has to be maintained
+          for (const t of this.trees) {
+            // how far up this tree the bird is: 0 at the roots, 1 at the tip
+            const rel = (pos.y - t.y) / (TREES.height * t.scale);
+            if (rel > 1) continue;
+            // the canopy is a cone, so the hitbox narrows with height too — a fat
+            // cylinder would swat birds clearing the top by ten metres
+            const taper = 1 - 0.75 * Math.max(rel, 0);
+            const reach = TREES.canopy * t.scale * taper + ISLAND.clearance;
+            const dx = pos.x - t.x;
+            if (Math.abs(dx) > reach) continue;
+            const dz = pos.z - t.z;
+            if (dx * dx + dz * dz < reach * reach) return "tree";
           }
           return null;
         }
 
         /**
-         * Headwind above the canyon rim. Without it you can simply flap over the walls
-         * and coast where nothing can hit you, which skips the whole game.
+         * Headwind at the edges of the world: a soft lid overhead. Without it you can
+         * simply climb above everything that can hit you, which skips the game.
          */
         ceilingPush(pos) {
-          const d = distanceOf(pos.z);
-          const rim = floorY(d) + CANYON.wallHeight * CANYON.ceilingFraction;
-          const over = pos.y - rim;
-          return over > 0 ? Math.min(over * 0.45, 26) : 0;
+          const over = pos.y - ISLAND.ceiling;
+          return over > 0 ? Math.min(over * 0.45, 30) : 0;
+        }
+
+        /** Horizontal shove back toward the island, once past the fence out at sea. */
+        fencePush(pos) {
+          const out = this._push.set(0, 0, 0);
+          const r = Math.hypot(pos.x, pos.z);
+          const over = r - ISLAND.fence;
+          if (over <= 0 || r < 1e-3) return out;
+          return out.set(-pos.x / r, 0, -pos.z / r).multiplyScalar(Math.min(over * 0.22, 24));
         }
       }
 
@@ -1358,7 +1507,7 @@
         gravity: 17,
         cruiseSpeed: 38,
         minSpeed: 4, // numerical guard only — a slow bird is supposed to fall
-        maxSpeed: 96,
+        maxSpeed: 145, // a full stoop should run away with you
         stallSpeed: 19,
 
         // The wing trims itself toward level flight instead of generating raw CL*v^2,
@@ -1366,13 +1515,21 @@
         // can actually apply scales with the square of airspeed and is capped here —
         // that ceiling is what turns a fast dive into a hard swoop and leaves a slow
         // bird mushy and falling.
-        maxAuthority: 3.4,
+        // Raised alongside maxSpeed: at 3.4 the wing could hold a 96 m/s swoop, but a
+        // full stoop now arrives far faster than that, and the same ceiling turned the
+        // pull-out into a four-second mush that ate more height than the island has.
+        maxAuthority: 5.4,
         pullOutGain: 1.7, // how hard the wing fights a descent
         climbDamp: 0.28, // ...and how gently it resists a climb, so flapping still works
 
         dragOpen: 0.0011, // wings spread — sets the glide ratio
-        dragTuck: 0.0004, // wings folded
+        dragTuck: 0.00016, // wings folded: almost nothing holds you back
         dragFlap: 0.0012, // extra cost of beating your wings
+
+        // A stoop is not a fall. Tucking pitches the nose over under its own power
+        // instead of waiting for gravity to swing the flight path down, which is the
+        // difference between dropping out of the sky and diving at something.
+        divePush: 34, // m/s² of nose-down, at a full tuck
 
         maxBank: 1.25, // rad
         // Critically damped roll: it eases in and settles without overshoot, where a
@@ -1400,6 +1557,7 @@
           this.bankVel = 0;
           this.stamina = 100;
           this.alive = true;
+          this.tireless = false; // roam mode: flapping costs nothing
 
           this.liftAxis = new THREE.Vector3(0, 1, 0); // bird-relative "up", tilted by bank
           this.wingOpen = 1;
@@ -1495,10 +1653,15 @@
           this.vel.addScaledVector(lift, liftMag * dt);
           this.vel.addScaledVector(dir, -drag * speed * speed * dt);
 
+          // negative lift while tucked: it rotates the flight path down rather than
+          // adding speed directly, so the dive steepens first and the speed is what
+          // gravity then does to a bird already pointing at the ground
+          if (tuck > 0) this.vel.addScaledVector(lift, -FLIGHT.divePush * tuck * dt);
+
           /* ---- flap ---- */
           if (gesture.flap) {
             let power = gesture.flap.power;
-            const cost = FLIGHT.flapCost * power;
+            const cost = this.tireless ? 0 : FLIGHT.flapCost * power;
             if (this.stamina < cost) power *= FLIGHT.exhaustedPower;
             this.stamina = Math.max(0, this.stamina - cost);
 
@@ -1529,9 +1692,9 @@
       /* ==========================================================================
        * The bird: geometry, inked outlines, wing animation
        * ========================================================================== */
-      // Cool blues against a warm canyon: the bird stays readable against every
-      // background in the level, and toon shading needs bright base colours to
-      // survive being multiplied down into its darkest band.
+      // Cool blues against warm sand and green forest: the bird stays readable
+      // against every background on the island, and toon shading needs bright base
+      // colours to survive being multiplied down into its darkest band.
       const C = {
         back: new THREE.Color(0x3d9fd6), // top of the body
         belly: new THREE.Color(0xfff0c8),
@@ -1892,31 +2055,70 @@
       /* ==========================================================================
        * Ring gates
        * ========================================================================== */
-      const SPACING = 95;
-      const RADIUS = 9.5;
-      const POOL = 10;
+      const RADIUS = 13;
+      const POOL = 8;
       const BURSTS = 4;
-      const FIRST_D = 180;
+      const REACH = 260; // how near the bird must be before a gate can settle
 
-      /** Ring gates snake along the canyon so chaining them reads as a line to follow. */
-      function ringAt(index) {
-        const d = index * SPACING + FIRST_D;
-        const w = halfWidth(d);
-        const lateral = Math.sin(d * 0.0182) * w * 0.52 + Math.sin(d * 0.0071 + 2.4) * w * 0.24;
-        return {
-          index,
-          d,
-          x: centerX(d) + lateral,
-          // kept clear of the floor: the lowest gate still leaves room to fly through
-          y: floorY(d) + 44 + 22 * Math.sin(d * 0.0163 + 1.3),
-          z: -d,
-          radius: RADIUS,
-        };
+      /**
+       * The course is a circuit around the mountain. Gate `index` sits at a fixed
+       * angle around the peak; the radius weaves in and out and the height rides the
+       * terrain, so the line drifts from sea level out over the water to high on the
+       * flank. The index keeps climbing and never wraps, so the course spirals on
+       * for as long as you can stay up.
+       */
+      const COURSE = {
+        step: 0.2, // rad between gates — about 31 to a lap, roughly 100 m apart
+        radius: 375, // mean distance from the peak
+        swing: 150, // how far in and out the line weaves
+        clearance: 62, // metres above the ground beneath the gate
+        lift: 46, // extra height swing along the course
+      };
+
+      /** Centre of gate `index`, written into `out`. */
+      function ringPoint(index, out) {
+        const a = index * COURSE.step;
+        const r = COURSE.radius + Math.sin(a * 0.73 + 0.6) * COURSE.swing;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        // above whatever is underneath: the sea near the coast, the flank inland
+        const ground = Math.max(groundAt(x, z), 0);
+        const y = ground + COURSE.clearance + COURSE.lift * (0.5 + 0.5 * Math.sin(a * 1.31 + 2.1));
+        return out.set(x, y, z);
       }
 
-      const TORUS = new THREE.TorusGeometry(RADIUS, 1.0, 6, 20);
-      const OUTLINE = new THREE.TorusGeometry(RADIUS, 1.32, 6, 20);
-      const DISC = new THREE.CircleGeometry(RADIUS - 1.0, 26);
+      const _a = new THREE.Vector3();
+      const _b = new THREE.Vector3();
+
+      /** A reusable gate record — see ringAt. */
+      const gateRecord = () => ({
+        index: 0,
+        center: new THREE.Vector3(),
+        normal: new THREE.Vector3(),
+        radius: RADIUS,
+      });
+
+      /**
+       * A gate, with the direction of travel through it. The normal is the tangent
+       * of the course, so the hoop always faces the way you should be flying.
+       *
+       * This runs a dozen times a frame, so it fills a record you hand it rather
+       * than allocating — the caller owns the record and must not hold it past the
+       * next call on the same one.
+       */
+      function ringAt(index, out) {
+        out.index = index;
+        ringPoint(index, out.center);
+        // tangent from the neighbouring gates, which follows every weave of the line
+        ringPoint(index - 1, _a);
+        ringPoint(index + 1, _b);
+        out.normal.copy(_b).sub(_a).normalize();
+        return out;
+      }
+
+      const TORUS = new THREE.TorusGeometry(RADIUS, 1.5, 6, 22);
+      const OUTLINE = new THREE.TorusGeometry(RADIUS, 1.95, 6, 22);
+      const DISC = new THREE.CircleGeometry(RADIUS - 1.5, 26);
 
       function makeGate() {
         const holder = new THREE.Group();
@@ -1948,6 +2150,12 @@
           this.group = new THREE.Group();
           scene.add(this.group);
 
+          this._v = new THREE.Vector3();
+          this._p = new THREE.Vector3();
+          // two records: one the scoring pass owns, one the layout pass owns
+          this._gate = gateRecord();
+          this._slot = gateRecord();
+
           this.gates = Array.from({ length: POOL }, () => makeGate());
           this.bursts = Array.from({ length: BURSTS }, () => ({ ...makeGate(), life: 0 }));
           [...this.gates, ...this.bursts].forEach((g) => this.group.add(g.holder));
@@ -1967,18 +2175,33 @@
           });
         }
 
-        /** @returns the gate resolved this frame as `{ hit, ring, combo }`, or null. */
+        /**
+         * A gate settles when the bird crosses its plane: inside the hoop scores,
+         * outside it is a miss. On a circuit there is no single axis that always
+         * means "past it", so the test is the plane normal — and it only applies
+         * while the bird is actually in the neighbourhood of the gate. Wander off
+         * and the gate simply waits for you.
+         *
+         * @returns the gate resolved this frame as `{ hit, ring, combo }`, or null.
+         */
         update(dt, prevPos, pos, time) {
           let event = null;
 
-          // the bird only ever travels toward -Z, so gates resolve strictly in order
-          while (pos.z <= ringAt(this.nextIndex).z) {
-            const ring = ringAt(this.nextIndex);
-            const span = prevPos.z - pos.z;
-            const t = span > 1e-5 ? (prevPos.z - ring.z) / span : 0;
+          // more than one can settle in a frame, but never the whole course
+          for (let guard = 0; guard < 3; guard++) {
+            const ring = ringAt(this.nextIndex, this._gate);
+            if (pos.distanceTo(ring.center) > REACH) break;
+
+            const before = this._v.copy(prevPos).sub(ring.center).dot(ring.normal);
+            const after = this._v.copy(pos).sub(ring.center).dot(ring.normal);
+            if (before >= 0 || after < 0) break; // not through the plane this frame
+
+            // where the path pierced the plane, and whether that point is in the hoop
+            const t = before / (before - after);
             const cx = prevPos.x + (pos.x - prevPos.x) * t;
             const cy = prevPos.y + (pos.y - prevPos.y) * t;
-            const hit = Math.hypot(cx - ring.x, cy - ring.y) < ring.radius;
+            const cz = prevPos.z + (pos.z - prevPos.z) * t;
+            const hit = Math.hypot(cx - ring.center.x, cy - ring.center.y, cz - ring.center.z) < ring.radius;
 
             if (hit) {
               this.hits++;
@@ -2010,17 +2233,30 @@
 
         /** Position the gates without scoring them — used for the menu flythrough. */
         preview(pos, time) {
-          while (pos.z <= ringAt(this.nextIndex).z) this.nextIndex++;
+          // snap to whichever gate the drifting bird is nearest, so the menu shot
+          // always has the course laid out ahead of it
+          let best = this.nextIndex;
+          let bestD = Infinity;
+          for (let i = this.nextIndex; i < this.nextIndex + 16; i++) {
+            const d = pos.distanceTo(ringPoint(i, this._p));
+            if (d < bestD) {
+              bestD = d;
+              best = i;
+            }
+          }
+          this.nextIndex = best;
           this.#layout(time);
         }
 
         #layout(time) {
           for (let i = 0; i < POOL; i++) {
             const gate = this.gates[i];
-            const ring = ringAt(this.nextIndex + i);
+            const ring = ringAt(this.nextIndex + i, this._slot);
             gate.holder.visible = true;
-            gate.holder.position.set(ring.x, ring.y, ring.z);
-            gate.holder.rotation.z = time * 0.25 + ring.index;
+            gate.holder.position.copy(ring.center);
+            // face the hoop down the course, then spin it in its own plane
+            gate.holder.lookAt(this._p.copy(ring.center).add(ring.normal));
+            gate.holder.rotateZ(time * 0.25 + ring.index);
             // the nearest gate glows brightest, so the line to follow is unmistakable
             const prominence = 1 - i / POOL;
             gate.ringMat.opacity = 0.3 + 0.7 * prominence;
@@ -2034,7 +2270,8 @@
           const b = this.bursts.reduce((a, c) => (c.life < a.life ? c : a));
           b.life = 1;
           b.holder.visible = true;
-          b.holder.position.set(ring.x, ring.y, ring.z);
+          b.holder.position.copy(ring.center);
+          b.holder.quaternion.copy(this.gates[0].holder.quaternion);
           b.holder.scale.setScalar(1);
           b.ringMat.color.setHex(0xfff0d0);
         }
@@ -2057,6 +2294,16 @@
           this.alt = $("alt-fill");
           this.tilt = $("tilt-needle");
           this.warning = $("cam-warning");
+          this.guide = $("guide");
+          this.roamBadge = $("roam-badge");
+          this.recovery = $("recovery");
+          // the animation clears up after itself, whatever the run does meanwhile
+          this.recovery.addEventListener("animationend", () => {
+            this.recovery.classList.remove("show");
+            this.recovery.hidden = true;
+          });
+          this._gate = gateRecord();
+          this._ndc = new THREE.Vector3();
           this.modes = {
             flap: $("mode-flap"),
             glide: $("mode-glide"),
@@ -2069,8 +2316,19 @@
           this.el.hidden = !visible;
         }
 
-        reset() {
+        reset(roam = false) {
           this.shownScore = 0;
+          this.roamBadge.hidden = !roam;
+          this.recovery.classList.remove("show");
+          this.recovery.hidden = true;
+        }
+
+        /** Roam mode caught the bird — say so, briefly. */
+        flashRecovery() {
+          this.recovery.hidden = false;
+          this.recovery.classList.remove("show");
+          void this.recovery.offsetWidth; // restart it if it is already running
+          this.recovery.classList.add("show");
         }
 
         update(dt, flight, gesture, session) {
@@ -2091,7 +2349,7 @@
           const speedNorm = (flight.speed - FLIGHT.minSpeed) / (FLIGHT.maxSpeed - FLIGHT.minSpeed);
           this.speed.style.width = `${Math.round(speedNorm * 100)}%`;
 
-          // height above the canyon floor, not above sea level — that is what you can hit
+          // height above whatever is under you, not above sea level — that is what you hit
           const altNorm = Math.min(Math.max(session.altitude / session.ceiling, 0), 1);
           this.alt.style.width = `${Math.round(altNorm * 100)}%`;
 
@@ -2108,6 +2366,35 @@
           const hint = gesture.hint || "";
           this.warning.hidden = !hint;
           if (hint) this.warning.textContent = hint;
+        }
+
+        /**
+         * Project the next gate into screen space. While it is on screen the gate
+         * speaks for itself; once it is not, swing an arrow to the edge it went out
+         * of, so a wrong turn is recoverable instead of terminal.
+         */
+        guideTo(nextIndex, camera) {
+          const gate = ringAt(nextIndex, this._gate);
+          const p = this._ndc.copy(gate.center).project(camera);
+
+          // behind the camera, z leaves the [-1,1] box and x/y flip — mirror them back
+          const behind = p.z > 1;
+          const x = behind ? -p.x : p.x;
+          const y = behind ? -p.y : p.y;
+
+          if (!behind && Math.abs(x) < 0.82 && Math.abs(y) < 0.82) {
+            this.guide.hidden = true;
+            return;
+          }
+
+          this.guide.hidden = false;
+          const angle = Math.atan2(y, x);
+          // park it on an ellipse just inside the edges, pointing outward
+          const rx = innerWidth * 0.36;
+          const ry = innerHeight * 0.32;
+          this.guide.style.transform =
+            `translate(${Math.cos(angle) * rx}px, ${-Math.sin(angle) * ry}px)` +
+            ` rotate(${90 - (angle * 180) / Math.PI}deg)`;
         }
       }
 
@@ -2798,12 +3085,14 @@
       const CALIBRATION_SECONDS = 2.5;
       const RING_POINTS = 100;
       const MAX_MULTIPLIER = 8;
+      const RECOVER_HEIGHT = 55; // m of air a roaming bird is handed back after a scrape
 
       const el = {
         screen: $("screen"),
         card: $("screen-card"),
         status: $("status"),
         button: $("primary-btn"),
+        roamButton: $("roam-btn"),
         cam: $("cam"),
         video: $("cam-video"),
         overlay: $("cam-overlay"),
@@ -2812,7 +3101,7 @@
 
       const gfx = createScene(el.canvas);
       const chase = new ChaseCamera(gfx.camera);
-      const canyon = new Canyon(gfx.scene);
+      const island = new Island(gfx.scene);
       const rings = new Rings(gfx.scene);
       const bird = new Bird(gfx.scene);
       const flight = new BirdFlight();
@@ -2845,8 +3134,15 @@
         el.card.innerHTML = titleCardHTML;
         el.status = $("status");
         el.button = $("primary-btn");
+        el.roamButton = $("roam-btn");
         paintPoseArt(el.card);
       }
+
+      const START_POS = new THREE.Vector3();
+      const MENU_POS = new THREE.Vector3();
+      const MENU_AIM = new THREE.Vector3();
+      let menuIndex = 0;
+      const START_AIM = new THREE.Vector3();
 
       const session = {
         score: 0,
@@ -2856,7 +3152,8 @@
         combo: 0,
         cause: "",
         altitude: 0,
-        ceiling: CANYON.wallHeight * CANYON.ceilingFraction,
+        ceiling: ISLAND.ceiling,
+        roam: false, // free flight: the island, no fail state
       };
 
       /* ------------------------------------------------------------------ *
@@ -2873,8 +3170,12 @@
         }
       }
 
-      function showCalibration() {
+      /** Which mode the calibration that is running now will start. */
+      let pendingRoam = false;
+
+      function showCalibration(roam = false) {
         mode = "calibrating";
+        pendingRoam = roam;
         calibration = 0;
         poseReader.beginCalibration();
         el.cam.hidden = false;
@@ -2898,29 +3199,54 @@
           calibration = 0;
           return;
         }
-        startRun();
+        startRun(pendingRoam);
       }
 
-      function startRun() {
+      function startRun(roam = false) {
         mode = "playing";
         session.score = 0;
         session.ringScore = 0;
         session.distance = 0;
         session.combo = 0;
         session.cause = "";
+        session.roam = roam;
         flight.reset();
-        // the canyon centreline does not start at x=0, so spawn on it rather than beside it
-        flight.pos.set(centerX(0), floorY(0) + 78, 0);
-        canyon.reset();
+        flight.tireless = roam;
+        // start on the course, aimed the way the first gates run
+        ringPoint(-1, START_POS);
+        flight.pos.copy(START_POS);
+        ringPoint(0, START_AIM);
+        flight.vel.copy(START_AIM).sub(START_POS).normalize().multiplyScalar(FLIGHT.cruiseSpeed);
+        island.reset();
         rings.reset();
         bird.reset();
         chase.reset(flight);
         prevPos.copy(flight.pos);
         accumulator = 0;
         lostTimer = 0;
-        hud.reset();
+        hud.reset(roam);
         hud.show(true);
         setScreen(false);
+      }
+
+      /**
+       * Roam mode's answer to hitting something: set the bird down softly above
+       * whatever it just met, flying level at cruise. It keeps the heading, so you
+       * carry on where you were pointed rather than being teleported somewhere.
+       */
+      function recoverFlight() {
+        const clear = Math.max(groundAt(flight.pos.x, flight.pos.z), 0) + RECOVER_HEIGHT;
+        flight.pos.y = Math.max(flight.pos.y, clear);
+        const speed = Math.max(flight.vel.length(), FLIGHT.cruiseSpeed);
+        flight.vel.y = 0;
+        // a vertical stoop leaves nothing horizontal to point at, so pick a heading
+        if (flight.vel.lengthSq() < 1e-4) flight.vel.set(0, 0, -1);
+        flight.vel.setLength(Math.min(speed, FLIGHT.cruiseSpeed * 1.6));
+        flight.bank *= 0.3;
+        flight.bankVel = 0;
+        prevPos.copy(flight.pos); // or the gate test reads the jump as a crossing
+        chase.reset(flight);
+        hud.flashRecovery();
       }
 
       /**
@@ -2950,9 +3276,9 @@
         mode = "dead";
         session.best = Math.max(session.best, session.score);
         const cause = {
-          wall: "Clipped the canyon wall",
+          water: "Ditched in the sea",
           ground: "Hit the deck",
-          rock: "Met a rock spire",
+          tree: "Flew into a tree",
         }[session.cause] ?? "Down";
 
         el.card.innerHTML = `
@@ -2964,9 +3290,14 @@
             <div><b>${rings.bestCombo}×</b>best chain</div>
             <div><b>${session.best.toLocaleString()}</b>best run</div>
           </div>
-          <button class="btn" id="again-btn">Fly again</button>
+          <div class="btn-row">
+            <button class="btn" id="again-btn">Fly again</button>
+            <button class="btn btn-ghost" id="roam-again-btn">Roam</button>
+          </div>
           <p class="footnote">Chain rings without missing to multiply the score. Glide to get your wind back.</p>`;
-        $("again-btn").addEventListener("click", startRun);
+        // an event object would arrive as the roam flag, so wrap rather than pass
+        $("again-btn").addEventListener("click", () => startRun(false));
+        $("roam-again-btn").addEventListener("click", () => startRun(true));
         setScreen(true);
       }
 
@@ -3052,6 +3383,8 @@
         el.button.textContent = "Allow camera";
         el.button.disabled = false;
         el.button.onclick = grantCamera;
+        // roam still needs a controller, so it waits for the camera too
+        el.roamButton.disabled = true;
       }
 
       /** Acquire the camera and leave it running, with the preview visible. */
@@ -3069,7 +3402,9 @@
           setScreen(true);
           el.button.textContent = "Start";
           el.button.disabled = false;
-          el.button.onclick = showCalibration;
+          el.button.onclick = () => showCalibration(false);
+          el.roamButton.disabled = false;
+          el.roamButton.onclick = () => showCalibration(true);
           buildCameraPicker();
         } catch (err) {
           console.error("camera failed:", err);
@@ -3089,7 +3424,9 @@
           "Keyboard mode — <b>space</b> to flap, <b>shift</b> to dive, <b>A</b>/<b>D</b> to steer.";
         el.button.textContent = "Play with keys";
         el.button.disabled = false;
-        el.button.onclick = startRun;
+        el.button.onclick = () => startRun();
+        el.roamButton.disabled = false;
+        el.roamButton.onclick = () => startRun(true);
         mode = "title";
       }
 
@@ -3151,7 +3488,10 @@
       }
 
       addEventListener("keydown", (e) => {
-        if (e.code === "KeyR" && (mode === "playing" || mode === "paused" || mode === "dead")) startRun();
+        // restart in whichever mode you were already in
+        if (e.code === "KeyR" && (mode === "playing" || mode === "paused" || mode === "dead")) {
+          startRun(session.roam);
+        }
       });
 
       /* ------------------------------------------------------------------ *
@@ -3226,23 +3566,24 @@
 
           // Physics runs on a fixed step so the flight model feels identical at 30, 60
           // or 144fps, and so a fast dive is collision-checked several times per frame
-          // instead of teleporting past a spire.
+          // instead of teleporting past a treetop.
           accumulator = Math.min(accumulator + dt, 0.2);
           let step = gesture;
           let hit = null;
           while (accumulator >= PHYSICS_STEP && !hit) {
-            flight.update(PHYSICS_STEP, step, canyon);
-            flight.vel.y -= canyon.ceilingPush(flight.pos) * PHYSICS_STEP;
+            flight.update(PHYSICS_STEP, step, island);
+            flight.vel.y -= island.ceilingPush(flight.pos) * PHYSICS_STEP;
+            flight.vel.addScaledVector(island.fencePush(flight.pos), PHYSICS_STEP);
             accumulator -= PHYSICS_STEP;
             // the flap is an impulse, so it must land exactly once however many steps run
             if (step.flap) step = { ...step, flap: null };
-            hit = canyon.collide(flight.pos);
+            hit = island.collide(flight.pos);
           }
 
-          const d = distanceOf(flight.pos.z);
-          canyon.ensure(d);
-          session.distance = Math.max(session.distance, d);
-          session.altitude = flight.pos.y - floorY(d);
+          // on a circuit there is no "how far down the line" to read off an axis,
+          // so distance is simply the path actually flown
+          session.distance += flight.pos.distanceTo(prevPos);
+          session.altitude = flight.pos.y - Math.max(groundAt(flight.pos.x, flight.pos.z), 0);
 
           const event = rings.update(dt, prevPos, flight.pos, time);
           if (event?.hit) {
@@ -3251,7 +3592,11 @@
           session.combo = rings.combo;
           session.score = Math.floor(session.distance) + session.ringScore;
 
-          if (hit) {
+          if (hit && session.roam) {
+            // roam has no fail state: lift the bird clear and hand it back flying
+            // level, so a scrape costs you height and nothing else
+            recoverFlight();
+          } else if (hit) {
             session.cause = hit;
             flight.alive = false;
             mode = "dying";
@@ -3277,16 +3622,18 @@
           chase.update(dt, flight, Math.max(0, speedNorm));
           gfx.dust.update(flight.pos, gfx.camera, gfx.renderer);
           gfx.clouds.update(flight.pos);
-          if (mode === "playing") hud.update(dt, flight, gesture, session);
+          if (mode === "playing") {
+            hud.update(dt, flight, gesture, session);
+            hud.guideTo(rings.nextIndex, gfx.camera);
+          }
         } else {
-          // slow drift down the canyon behind the menu
-          flight.pos.z -= 26 * dt;
-          const d = distanceOf(flight.pos.z);
-          canyon.ensure(d);
-          flight.pos.x = centerX(d) + Math.sin(time * 0.25) * 14;
-          flight.pos.y = floorY(d) + 62 + Math.sin(time * 0.4) * 7;
-          flight.vel.set(Math.sin(time * 0.3) * 4, Math.sin(time * 0.4) * 2, -26);
-          flight.bank = Math.sin(time * 0.25) * 0.22;
+          // slow orbit of the island behind the menu, riding the ring course itself
+          menuIndex += dt * 0.3;
+          ringPoint(menuIndex, MENU_POS);
+          ringPoint(menuIndex + 0.6, MENU_AIM);
+          flight.pos.copy(MENU_POS).addScaledVector(UP, Math.sin(time * 0.4) * 6);
+          flight.vel.copy(MENU_AIM).sub(MENU_POS).normalize().multiplyScalar(26);
+          flight.bank = -0.3 + Math.sin(time * 0.25) * 0.1;
           rings.preview(flight.pos, time);
           bird.update(dt, flight, gesture);
           chase.update(dt, flight, 0.15);

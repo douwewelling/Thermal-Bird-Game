@@ -5,6 +5,10 @@
 # 2b576d6). Terughalen kan met:
 #     git checkout 2b576d6 -- bird-game/
 
+# De losse werkbank waarop het eiland is ontworpen: hetzelfde terrein en bos,
+# maar met een vrij draaiende camera eromheen in plaats van een spel.
+island.html
+
 bird-game/
 body_tracker.py
 demo.py

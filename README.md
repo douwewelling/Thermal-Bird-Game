@@ -1,7 +1,7 @@
 # Thermal
 
 Browserspel waarin je armen de vleugels zijn: een webcam volgt je lichaam en je
-vliegt een eindeloze canyon door.
+vliegt rond een eiland, dwars door een eindeloze keten ringen.
 
 **Spelen: [douwewelling.github.io/Thermal-Bird-Game](https://douwewelling.github.io/Thermal-Bird-Game/)**
 
@@ -14,14 +14,26 @@ blijft in je browser — er gaat geen enkel camerabeeld het netwerk op.
 |---|---|
 | Armen op en neer slaan | Klappen en klimmen. Kost conditie. |
 | Armen recht opzij houden | Zweven. Conditie loopt terug en je pakt thermiek. |
-| Armen tegen je lichaam | Duiken: je valt en wint snelheid. |
+| Armen tegen je lichaam | Stoten: de neus kantelt omlaag en je snelheid loopt hard op. |
 | Schouder laten zakken, overhellen | Bochten maken. |
 
 Hoe voller je slag, hoe meer lift: een trage, grote slag tilt je verder dan
 snel wapperen. Vlieg door de ringen om je score te vermenigvuldigen.
 
+De stoot is een keuze, geen noodrem: met je armen ingetrokken kantelt de neus
+binnen anderhalve seconde naar recht omlaag en haal je bijna viermaal je
+kruissnelheid. Uittrekken kost daarna zo'n 190 meter hoogte, dus begin er alleen
+aan als je die hebt. Het beeld opent mee naarmate je sneller gaat.
+
 Geen webcam? Zet `?keys` achter de URL: spatie = klappen, shift = duiken,
 A/D = sturen.
+
+## Roam
+
+Naast een run is er **Roam**: hetzelfde eiland zonder faalstaat. Klappen kost
+geen conditie, en raak je de grond, een boom of het water, dan wordt de vogel
+opgevangen en vliegt hij vlak verder in plaats van dat de run eindigt. De ringen
+tellen nog gewoon. Bedoeld om rond te vliegen en te kijken.
 
 ## Zelf draaien
 
@@ -37,9 +49,22 @@ Open daarna de `localhost`-URL die er verschijnt.
 
 ## Hoe het werkt
 
-Alles zit in [`index.html`](index.html). Drie bibliotheken worden van een CDN
-geladen: three.js voor de 3D, MediaPipe PoseLandmarker voor de tracking, en het
-pose-model zelf.
+Alles zit in [`index.html`](index.html). Alles wat het laadt komt van een CDN:
+three.js voor de 3D, MediaPipe PoseLandmarker voor de tracking, en het pose-model
+zelf. Een importmap bovenin regelt de namen, omdat de three-hulpmodules elkaar op
+naam importeren en de browser anders niet weet waar `three` staat.
+
+**De wereld is één functie.** `groundAt(x, z)` geeft de hoogte van het eiland op
+elk punt: een afgeronde berg in het midden, glooiend land eromheen en een
+zeebodem die voorbij de kustlijn doorzakt. Het terreinnet, de bomen, de hoogte
+van de ringen en de botsingen lezen allemaal diezelfde functie, dus wat je ziet
+en waar je tegenaan vliegt kunnen niet uit elkaar lopen. De bomen staan op
+concentrische ringen rond de berg, om de 58 meter, tot aan de boomgrens.
+
+**Het parcours is een rondje.** De ringen liggen op een spiraal om de berg die
+naar binnen en buiten slingert, dus het parcours houdt nooit op. Omdat je in een
+rondje vliegt kun je de lijn ook kwijtraken: verdwijnt de volgende ring uit
+beeld, dan wijst een pijl aan de schermrand terug.
 
 **Van lichaam naar besturing.** MediaPipe levert 3D-punten voor schouders,
 ellebogen, polsen en heupen. Die worden omgerekend naar een assenstelsel dat aan
@@ -53,16 +78,19 @@ dus de tracker geeft tussendoor hetzelfde resultaat terug. Dat opnieuw filteren
 liet dezelfde armbeweging als 0,64 tellen bij 30 fps en als 1,07 bij 120 fps.
 Nu wordt er alleen op nieuwe beelden gemeten en schuift de uitvoer elk frame
 soepel mee. De physics loopt op een vaste stap van 1/120 s, zodat een duik
-overal hetzelfde voelt en niet door een rotspunt heen schiet.
+overal hetzelfde voelt en niet dwars door een boomtop heen schiet.
 
 **Uit beeld lopen pauzeert.** Korte haperingen worden opgevangen door naar een
 neutrale glijvlucht te zakken; pas echte afwezigheid zet het spel stil, en bij
 terugkomst krijg je een aftelling.
 
-**De cartoonstijl** komt zonder textures of post-processing: toon-shading in
-drie harde stappen, rotslagen die naar vaste kleurbanden worden afgerond, en
-contouren die ontstaan door elke vorm twee keer te tekenen — één keer opgeblazen
-langs zijn normalen in een donkere kleur.
+**De cartoonstijl** komt zonder textures of post-processing: toon-shading in drie
+harde stappen, een grondkleur die alleen uit de hoogte volgt — nat zand, strand,
+gras, bos, kale rots, top — en contouren om de vogel en de ringen, die ontstaan
+door die vormen twee keer te tekenen: één keer opgeblazen langs hun normalen in
+een donkere kleur. Het eiland en de bomen krijgen geen contour maar wel platte
+facetten, zodat ze bij de vogel passen zonder dat er tweehonderd bomen dubbel
+getekend hoeven te worden.
 
 ## Licentie
 
