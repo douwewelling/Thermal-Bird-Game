@@ -1,5 +1,10 @@
 import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
 
+// "/" in dev, "/Thermal-Bird-Game/" on GitHub Pages. Vite rewrites the paths in
+// index.html for us, but these two are runtime strings it never sees, so they
+// have to be built from the base or the model 404s on a project page.
+const ASSETS = import.meta.env.BASE_URL;
+
 export const LM = {
   NOSE: 0,
   LEFT_SHOULDER: 11,
@@ -38,9 +43,9 @@ export class PoseTracker {
   }
 
   async loadModel() {
-    const vision = await FilesetResolver.forVisionTasks("/wasm");
+    const vision = await FilesetResolver.forVisionTasks(`${ASSETS}wasm`);
     const options = (delegate) => ({
-      baseOptions: { modelAssetPath: "/models/pose_landmarker_lite.task", delegate },
+      baseOptions: { modelAssetPath: `${ASSETS}models/pose_landmarker_lite.task`, delegate },
       runningMode: "VIDEO",
       numPoses: 1,
       minPoseDetectionConfidence: 0.5,
