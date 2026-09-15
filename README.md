@@ -6,6 +6,23 @@
 > het doet zijn eigen tracking met hetzelfde modelbestand uit `models/`.
 > Start het met `cd bird-game && npm install && npm run dev`.
 
+## Het spel draaien
+
+```bash
+git clone https://github.com/douwewelling/Thermal-Bird-Game.git
+cd Thermal-Bird-Game/bird-game
+npm install
+npm run dev
+```
+
+Open daarna de **localhost**-URL die Vite print (niet je netwerk-IP: browsers
+geven alleen camera-toegang op `https://` of `localhost`). `npm install` haalt
+de MediaPipe-runtime en het pose-model binnen, dus daarna draait het spel
+volledig offline — er gaat geen enkel camerabeeld het netwerk op.
+
+Zonder webcam spelen kan met `?keys` achter de URL: spatie = klappen,
+shift = duiken, A/D = sturen.
+
 Real-time tracking van armen en torso (polsen, ellebogen, schouders, heupen)
 via een webcam, met [MediaPipe PoseLandmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker).
 Ontworpen als bouwsteen voor een motion-tracking spel.
@@ -108,3 +125,8 @@ Beschikbare gewrichtsnamen (`TRACKED_JOINTS` in `body_tracker.py`):
 - `min_detection_confidence`/`min_tracking_confidence`: verlagen maakt de
   tracker gevoeliger maar instabieler; verhogen maakt hem stabieler maar
   mist soms snelle bewegingen.
+
+## Licentie
+
+[MIT](LICENSE) — vrij te gebruiken, aan te passen en te verspreiden, mits de
+copyrightvermelding meegaat.
