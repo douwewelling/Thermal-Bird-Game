@@ -3,7 +3,11 @@
 Your arms are the wings. A webcam tracks your body with MediaPipe PoseLandmarker,
 and three.js renders an endless canyon you fly through.
 
-## Run it
+**Play it: [douwewelling.github.io/Thermal-Bird-Game](https://douwewelling.github.io/Thermal-Bird-Game/)**
+— served over https, so the camera works. Bring a webcam and room to spread your
+arms.
+
+## Run it locally
 
 ```bash
 npm install

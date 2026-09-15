@@ -6,7 +6,14 @@
 > het doet zijn eigen tracking met hetzelfde modelbestand uit `models/`.
 > Start het met `cd bird-game && npm install && npm run dev`.
 
-## Het spel draaien
+## Spelen zonder iets te installeren
+
+**[douwewelling.github.io/Thermal-Bird-Game](https://douwewelling.github.io/Thermal-Bird-Game/)**
+
+Draait op `https`, dus de camera werkt gewoon. Je hebt een webcam en wat ruimte
+nodig om je armen te spreiden.
+
+## Zelf draaien
 
 ```bash
 git clone https://github.com/douwewelling/Thermal-Bird-Game.git
