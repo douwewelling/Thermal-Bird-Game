@@ -56,10 +56,18 @@ naam importeren en de browser anders niet weet waar `three` staat.
 
 **De wereld is één functie.** `groundAt(x, z)` geeft de hoogte van het eiland op
 elk punt: een afgeronde berg in het midden, glooiend land eromheen en een
-zeebodem die voorbij de kustlijn doorzakt. Het terreinnet, de bomen, de hoogte
-van de ringen en de botsingen lezen allemaal diezelfde functie, dus wat je ziet
-en waar je tegenaan vliegt kunnen niet uit elkaar lopen. De bomen staan op
-concentrische ringen rond de berg, om de 58 meter, tot aan de boomgrens.
+zeebodem die voorbij de kustlijn doorzakt. Het terreinnet, de begroeiing, de
+hoogte van de ringen en de botsingen lezen allemaal diezelfde functie, dus wat je
+ziet en waar je tegenaan vliegt kunnen niet uit elkaar lopen.
+
+**Het eiland is vol, maar niet in rijen.** Zo'n veertienhonderd dingen staan
+erop: ronde bomen, dennen en struiken in drie formaten, en rotsblokken van
+kiezel tot huisgroot. Het eiland is in vakjes van 24 meter verdeeld en elk vakje
+krijgt één plek, willekeurig ergens erin — daardoor zijn de afstanden onregelmatig
+maar blijven er geen gaten over. Wat er groeit hangt af van de hoogte: rotsen en
+struiken op het strand, een gemengd bos op de vlakte, dennen en keien die
+uitdunnen op de flank, kale rots bovenaan. Onder het parcours groeit niets hoger
+dan 64 meter, zodat geen boom ooit een ring blokkeert.
 
 **Het parcours is een rondje.** De ringen liggen op een spiraal om de berg die
 naar binnen en buiten slingert, dus het parcours houdt nooit op. Omdat je in een
@@ -73,6 +81,12 @@ klap is een neerwaartse slag gemeten vanaf je eigen hoogste punt, niet vanaf de
 horizon — veel mensen klappen volledig onder schouderhoogte en zouden met een
 vaste drempel nooit van de grond komen.
 
+Een volle slag eindigt met je handen langs je heupen, en dat is precies de houding
+voor duiken. Zonder correctie las het spel elke krachtige klap dus óók als
+intrekken, en duwde het de neus omlaag op het moment dat je omhoog wilde: hoe
+harder je klapte, hoe minder het deed. Zolang je armen snel bewegen, en nog even
+daarna, telt intrekken daarom niet mee.
+
 **Framerate doet er niet toe.** De camera levert trager dan het scherm tekent,
 dus de tracker geeft tussendoor hetzelfde resultaat terug. Dat opnieuw filteren
 liet dezelfde armbeweging als 0,64 tellen bij 30 fps en als 1,07 bij 120 fps.
@@ -84,13 +98,20 @@ overal hetzelfde voelt en niet dwars door een boomtop heen schiet.
 neutrale glijvlucht te zakken; pas echte afwezigheid zet het spel stil, en bij
 terugkomst krijg je een aftelling.
 
-**De cartoonstijl** komt zonder textures of post-processing: toon-shading in drie
-harde stappen, een grondkleur die alleen uit de hoogte volgt — nat zand, strand,
-gras, bos, kale rots, top — en contouren om de vogel en de ringen, die ontstaan
-door die vormen twee keer te tekenen: één keer opgeblazen langs hun normalen in
-een donkere kleur. Het eiland en de bomen krijgen geen contour maar wel platte
-facetten, zodat ze bij de vogel passen zonder dat er tweehonderd bomen dubbel
-getekend hoeven te worden.
+**De tekenfilmstijl** leent de look van een Amerikaanse sitcom-cartoon: een
+strakke blauwe lucht met bolle witte wolken, verzadigd gras, geel strand en
+lila-grijze rotsen, alles in twee tonen — licht en schaduw, met een paarsige
+schaduwkant in plaats van grijs. De grondkleur volgt alleen uit de hoogte, in
+vlakke vlakken met een smalle overgang, en langs de waterlijn loopt een witte
+branding.
+
+De inktlijn is één stap voor het hele beeld. Het spel tekent eerst alles in een
+buffer en zet daarna een lijn waar de diepte van het ene oppervlak naar het
+andere springt. Omdat de diepte wordt vergeleken als 1/afstand, die over elk plat
+vlak lineair loopt, tekent een helling die naar de horizon wegloopt niets en de
+rand van een boom voor de berg wel. De lijn is dikker op wat dichtbij is en loopt
+weg in de nevel. De wolken worden daarna apart getekend, zonder lijn, zoals in
+een geschilderde lucht. Zonder textures: alle kleur zit in de hoekpunten.
 
 ## Licentie
 

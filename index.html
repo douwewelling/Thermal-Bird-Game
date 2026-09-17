@@ -785,16 +785,16 @@
       /* ==========================================================================
        * Scene, sky, lighting, chase camera
        * ========================================================================== */
-      // bright midday over open water: the island has to read as green and sunlit,
-      // which the old sunset palette turned orange
+      // A cartoon sitcom sky: one strong, clean blue that barely darkens overhead and
+      // pales toward the horizon, with none of the grey a realistic haze would add.
       const PALETTE = {
-        zenith: new THREE.Color(0x3f8ed6),
-        upper: new THREE.Color(0x63aae4),
-        mid: new THREE.Color(0x92c9ef),
-        horizon: new THREE.Color(0xcfe7f7),
-        sun: new THREE.Color(0xfffbe8),
-        glow: new THREE.Color(0xfff0c0),
-        haze: new THREE.Color(0xbcdcf0),
+        zenith: new THREE.Color(0x2a86e0),
+        upper: new THREE.Color(0x47a2ee),
+        mid: new THREE.Color(0x6fbdf5),
+        horizon: new THREE.Color(0xaee0fb),
+        sun: new THREE.Color(0xfffbe0),
+        glow: new THREE.Color(0xfff2b0),
+        haze: new THREE.Color(0xa6daf7),
       };
 
       /**
@@ -813,6 +813,8 @@
       }
 
       const TOON = toonGradient(3);
+      // the island is drawn in two tones, light and shadow, the way a cel is painted
+      const TOON2 = toonGradient(2);
 
       const SKY_VERT = /* glsl */ `
         varying vec3 vDir;
@@ -822,7 +824,7 @@
         }
       `;
 
-      // banded rather than blended, and the sun is a hard disc — a painted backdrop
+      // a smooth wash with the sun as a hard disc on top — a painted backdrop
       const SKY_FRAG = /* glsl */ `
         varying vec3 vDir;
         uniform vec3 uZenith, uUpper, uMid, uHorizon, uSun, uGlow, uSunDir;
@@ -830,10 +832,12 @@
           vec3 dir = normalize(vDir);
           float h = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
 
+          // one broad, clean wash from pale horizon to strong blue overhead — a painted
+          // cartoon backdrop has no visible seams in it
           vec3 col = uHorizon;
-          col = mix(col, uMid, smoothstep(0.502, 0.533, h));
-          col = mix(col, uUpper, smoothstep(0.583, 0.612, h));
-          col = mix(col, uZenith, smoothstep(0.705, 0.745, h));
+          col = mix(col, uMid, smoothstep(0.49, 0.56, h));
+          col = mix(col, uUpper, smoothstep(0.54, 0.68, h));
+          col = mix(col, uZenith, smoothstep(0.64, 0.92, h));
 
           float d = dot(dir, normalize(uSunDir));
           col += uGlow * pow(max(d, 0.0), 5.0) * 0.30;
@@ -859,6 +863,147 @@
         widen: 6.5, // how fast it opens...
         settle: 2.2, // ...and how slowly it lets go
       };
+
+      /* ==========================================================================
+       * Ink: one even, dark line around every shape, drawn from the depth buffer
+       * ========================================================================== */
+      // A cartoon is held together by its line, and the line has to be the same
+      // weight on a tree, a rock and the ridge of the mountain. Outlining each mesh
+      // separately cannot do that for a height field, so the whole frame is inked
+      // at once: wherever depth jumps from one surface to another, a line goes down.
+      const INK = {
+        color: new THREE.Color(0x1d1422),
+        width: 1, // px either side of an edge far away, before device pixel ratio
+        near: 2.2, // ...and how many times that close up, so a line reads at any distance
+        nearAt: 60, // m at which the line is at its heaviest
+        farAt: 420, // m at which it has thinned down to `width`
+        soft: 0.012, // curvature at which a line starts to show...
+        hard: 0.045, // ...and at which it is fully drawn
+      };
+
+      const INK_VERT = /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+      `;
+
+      const INK_FRAG = /* glsl */ `
+        uniform sampler2D tColor;
+        uniform sampler2D tDepth;
+        uniform vec2 uStep;
+        uniform vec3 uInk;
+        uniform float uSoft, uHard, uNear, uFar, uFog, uHeavy, uNearAt, uFarAt;
+        varying vec2 vUv;
+
+        // The depth buffer stores a value that is linear in 1/distance, and 1/distance
+        // is itself linear across any flat surface on screen. So its second difference
+        // is zero on every plane however steeply it is seen — the ground running off to
+        // the horizon draws nothing — and spikes where one surface ends over another.
+        float inv(vec2 uv) {
+          float d = texture2D(tDepth, uv).x;
+          float z = (uNear * uFar) / (uFar - d * (uFar - uNear));
+          return 1.0 / z;
+        }
+
+        void main() {
+          vec4 base = texture2D(tColor, vUv);
+          float raw = texture2D(tDepth, vUv).x;
+
+          float c = inv(vUv);
+          // a pen line is heavier on what is close: widen the sampling step up near
+          vec2 stepUv = uStep * mix(uHeavy, 1.0, smoothstep(uNearAt, uFarAt, 1.0 / c));
+          float l = inv(vUv - vec2(stepUv.x, 0.0));
+          float r = inv(vUv + vec2(stepUv.x, 0.0));
+          float d = inv(vUv - vec2(0.0, stepUv.y));
+          float u = inv(vUv + vec2(0.0, stepUv.y));
+          float near = max(max(c, l), max(max(r, d), u));
+          float curve = abs(l + r + d + u - 4.0 * c) / near;
+          float edge = smoothstep(uSoft, uHard, curve);
+
+          // lines fade into the haze with everything else, measured at the nearer side
+          float dist = 1.0 / near;
+          edge *= exp(-uFog * uFog * dist * dist);
+
+          gl_FragColor = vec4(mix(base.rgb, uInk, edge), 1.0);
+          // hand the scene depth on, so what is drawn after this still hides correctly
+          gl_FragDepth = raw;
+
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `;
+
+      class InkPass {
+        constructor(renderer, camera, fog) {
+          this.renderer = renderer;
+          this.camera = camera;
+          this.target = new THREE.WebGLRenderTarget(1, 1, {
+            type: THREE.HalfFloatType,
+            samples: 4,
+          });
+          this.target.depthTexture = new THREE.DepthTexture(1, 1);
+
+          this.material = new THREE.ShaderMaterial({
+            vertexShader: INK_VERT,
+            fragmentShader: INK_FRAG,
+            uniforms: {
+              tColor: { value: this.target.texture },
+              tDepth: { value: this.target.depthTexture },
+              uStep: { value: new THREE.Vector2() },
+              uInk: { value: INK.color },
+              uSoft: { value: INK.soft },
+              uHard: { value: INK.hard },
+              uNear: { value: camera.near },
+              uFar: { value: camera.far },
+              uFog: { value: fog.density },
+              uHeavy: { value: INK.near },
+              uNearAt: { value: INK.nearAt },
+              uFarAt: { value: INK.farAt },
+            },
+            // depth must be tested (always passing) or GL refuses to write it
+            depthTest: true,
+            depthFunc: THREE.AlwaysDepth,
+            depthWrite: true,
+          });
+          this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.material);
+          this.quad.frustumCulled = false;
+          this.quadScene = new THREE.Scene();
+          this.quadScene.add(this.quad);
+          this.size = new THREE.Vector2();
+        }
+
+        resize() {
+          const s = this.renderer.getDrawingBufferSize(this.size);
+          this.target.setSize(s.x, s.y);
+          const px = INK.width * this.renderer.getPixelRatio();
+          this.material.uniforms.uStep.value.set(px / s.x, px / s.y);
+        }
+
+        /**
+         * Draw `scene` inked. Anything on layer 1 is left out of the line work and
+         * drawn afterwards — clouds, which in the cartoon sky are painted, not outlined.
+         */
+        render(scene) {
+          const { renderer, camera } = this;
+          camera.layers.set(0);
+          renderer.setRenderTarget(this.target);
+          renderer.clear();
+          renderer.render(scene, camera);
+
+          renderer.setRenderTarget(null);
+          renderer.clear();
+          renderer.render(this.quadScene, camera);
+
+          const autoClear = renderer.autoClear;
+          renderer.autoClear = false;
+          camera.layers.set(1);
+          renderer.render(scene, camera);
+          renderer.autoClear = autoClear;
+          camera.layers.set(0);
+        }
+      }
 
       function createScene(canvas) {
         const renderer = new THREE.WebGLRenderer({
@@ -906,17 +1051,23 @@
         follow.add(sky);
 
         /* ---- light: one strong key plus flat fill, so the toon steps stay readable ---- */
-        // sky above, reflected green and blue from below
-        scene.add(new THREE.HemisphereLight(0xdcefff, 0x4a7a54, 0.85));
-        const sun = new THREE.DirectionalLight(0xfff6dc, 1.6);
-        sun.position.copy(SUN_DIR).multiplyScalar(400);
-        scene.add(sun);
-        const rim = new THREE.DirectionalLight(0x9fc8e8, 0.55);
-        rim.position.set(-1, 0.55, 0.6).multiplyScalar(300);
-        scene.add(rim);
+        // The shadow side of a cartoon is not grey, it is a cooler, purpler version of
+        // the colour — so the fill from below is lilac rather than a darker green.
+        const lights = [
+          new THREE.HemisphereLight(0xe6f4ff, 0x8a74b8, 1.05),
+          new THREE.DirectionalLight(0xfff8e6, 1.55),
+          new THREE.DirectionalLight(0xb9d8f2, 0.35),
+        ];
+        lights[1].position.copy(SUN_DIR).multiplyScalar(400);
+        lights[2].position.set(-1, 0.55, 0.6).multiplyScalar(300);
+        for (const light of lights) {
+          light.layers.enable(1); // the clouds are drawn on their own layer, and need lighting too
+          scene.add(light);
+        }
 
         const dust = new Dust(scene);
         const clouds = new Clouds(scene);
+        const ink = new InkPass(renderer, camera, scene.fog);
 
         const resize = () => {
           const w = innerWidth;
@@ -924,11 +1075,14 @@
           renderer.setSize(w, h, false);
           camera.aspect = w / h;
           camera.updateProjectionMatrix();
+          ink.resize();
         };
         resize();
         addEventListener("resize", resize);
 
-        return { renderer, scene, camera, follow, dust, clouds };
+        const draw = () => ink.render(scene);
+
+        return { renderer, scene, camera, follow, dust, clouds, draw };
       }
 
       class Clouds {
@@ -937,24 +1091,42 @@
           this.group = new THREE.Group();
           scene.add(this.group);
 
-          const blob = new THREE.IcosahedronGeometry(1, 1);
-          // white now that the sky is blue; the old pink read as sunset cloud
-          const shades = [0xffffff, 0xf4fbff, 0xe6f3fd];
+          // Cartoon cumulus: a row of fat lobes with a flat underside and smaller ones
+          // piled on top, pure white, shaded pale lilac underneath by the fill light.
+          // They live on layer 1, so the ink pass leaves them soft and unlined.
+          const blob = new THREE.IcosahedronGeometry(1, 2);
+          // lit from within a little, so the shadow side lands on a pale lilac-white
+          // rather than the grey a white surface turns in ordinary shade
+          const material = new THREE.MeshToonMaterial({
+            color: 0xffffff,
+            emissive: 0xc2c4ee,
+            emissiveIntensity: 0.55,
+            gradientMap: TOON2,
+          });
           this.puffs = [];
+
+          const addLobe = (cloud, r, x, y, z) => {
+            const m = new THREE.Mesh(blob, material);
+            m.scale.set(r, r * 0.82, r * 0.9);
+            m.position.set(x, y, z);
+            m.layers.set(1);
+            cloud.add(m);
+          };
 
           for (let i = 0; i < count; i++) {
             const cloud = new THREE.Group();
-            const tint = shades[i % shades.length];
-            const lobes = 4 + Math.floor(Math.random() * 3);
-            for (let k = 0; k < lobes; k++) {
-              const m = new THREE.Mesh(
-                blob,
-                new THREE.MeshBasicMaterial({ color: tint, fog: true, transparent: true, opacity: 0.96 }),
-              );
-              const r = 7 + Math.random() * 9;
-              m.scale.set(r, r * (0.62 + Math.random() * 0.25), r * 0.85);
-              m.position.set((k - lobes / 2) * 9 + Math.random() * 4, Math.random() * 5, Math.random() * 6 - 3);
-              cloud.add(m);
+            const base = 3 + Math.floor(Math.random() * 3);
+            const width = base * 13;
+            for (let k = 0; k < base; k++) {
+              const r = 10 + Math.random() * 6;
+              // every base lobe bottoms out on the same line: the flat underside is what
+              // makes it read as a cartoon cloud rather than a heap of balls
+              addLobe(cloud, r, (k / (base - 1) - 0.5) * width, r * 0.82, Math.random() * 8 - 4);
+            }
+            for (let k = 0; k < base - 1; k++) {
+              const r = 11 + Math.random() * 8;
+              const x = ((k + 0.5) / (base - 1) - 0.5) * width * 0.8;
+              addLobe(cloud, r, x, 20 + Math.random() * 6, Math.random() * 6 - 3);
             }
             cloud.position.set(
               (Math.random() - 0.5) * this.span.x,
@@ -1230,25 +1402,29 @@
 
       /* ---------- terrain ---------- */
 
-      // sand, grass, forest, rock, bare summit
+      // Each band is one flat colour up to its height, like paint filled into a
+      // drawn shape. Neighbours only blend across `edge` metres at the border, so the
+      // island reads as regions of colour instead of a gradient.
       const BANDS = [
-        { h: 4, color: new THREE.Color(0xe6c893) },
-        { h: 17, color: new THREE.Color(0xf2dcac) },
-        { h: 48, color: new THREE.Color(0x86c25f) },
-        { h: 168, color: new THREE.Color(0x5d9c4a) },
-        { h: 262, color: new THREE.Color(0x8d8578) },
-        { h: 9999, color: new THREE.Color(0xe8e4dc) },
+        { h: 0.6, edge: 0.3, color: new THREE.Color(0xf2fbff) }, // surf where land meets sea
+        { h: 7, edge: 1.5, color: new THREE.Color(0xf0c75c) }, // wet sand
+        { h: 20, edge: 2, color: new THREE.Color(0xf8dc7a) }, // beach
+        { h: 150, edge: 5, color: new THREE.Color(0x8ad24c) }, // lawn-green plain
+        { h: 215, edge: 6, color: new THREE.Color(0x6cbd3c) }, // darker forest floor
+        { h: 300, edge: 8, color: new THREE.Color(0xa99fbd) }, // lilac-grey rock
+        { h: Infinity, edge: 0, color: new THREE.Color(0xf1ecf8) }, // pale summit
       ];
 
       function terrainColor(h, target) {
-        for (let i = 0; i < BANDS.length; i++) {
-          if (h <= BANDS[i].h) {
-            const lo = i === 0 ? -40 : BANDS[i - 1].h;
-            const from = i === 0 ? BANDS[0].color : BANDS[i - 1].color;
-            return target.copy(from).lerp(BANDS[i].color, smoothstep01(lo, BANDS[i].h, h));
-          }
+        let i = 0;
+        while (h > BANDS[i].h) i++;
+        target.copy(BANDS[i].color);
+        const below = BANDS[i - 1];
+        // soften only the strip just above the border with the band underneath
+        if (below && h < below.h + below.edge) {
+          target.lerp(below.color, 1 - smoothstep01(below.h - below.edge, below.h + below.edge, h));
         }
-        return target.copy(BANDS[BANDS.length - 1].color);
+        return target;
       }
 
       /**
@@ -1276,132 +1452,420 @@
 
         return new THREE.Mesh(
           geo,
-          new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: TOON }),
+          new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: TOON2 }),
         );
       }
 
-      /** One flat disc of sea, wide enough that the horizon dissolves into the haze. */
+      /**
+       * One flat disc of sea, wide enough that the horizon dissolves into the haze.
+       * Opaque and unlit: cartoon water is a single fill, and the surf line along the
+       * coast is painted onto the land, where the sea meets it.
+       */
       function buildOcean() {
         const mesh = new THREE.Mesh(
           new THREE.CircleGeometry(4200, 96),
-          new THREE.MeshBasicMaterial({ color: 0x2d87bd, transparent: true, opacity: 0.94 }),
+          new THREE.MeshBasicMaterial({ color: 0x2c9be6 }),
         );
         mesh.rotation.x = -Math.PI / 2;
         return mesh;
       }
 
-      /* ---------- forest ---------- */
+      /* ---------- ground cover: trees, bushes and rocks ---------- */
 
-      const TREES = {
-        spacing: 58, // fixed distance between trees, in metres
-        inner: 95, // nothing grows near the summit
-        outer: 590,
-        minGround: 22, // above the beach
-        maxGround: 210, // the treeline on the flank
-        maxSlope: 0.9,
-        jitter: 0.55, // how far a tree may stray off its grid point (0 = strict rings)
-        trunk: 17,
-        height: 47, // trunk plus canopy, less the sink into the ground
-        canopy: 15, // canopy radius, likewise
+      /** Small seeded generator, so the scattering is random but the same on every load. */
+      function seeded(seed) {
+        let a = seed >>> 0;
+        return () => {
+          a = (a + 0x6d2b79f5) >>> 0;
+          let t = a;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      const COVER = {
+        cell: 24, // m — one candidate spot per cell, anywhere inside it
+        tries: 3, // new spots to try in a cell before leaving it bare
+        bare: 0.04, // share of cells left empty on purpose, so it never reads as a grid
+        gap: 0.62, // how much of two footprints may overlap before a spot is refused
+        // Gates run anywhere in this band around the peak, at heights that start
+        // COURSE.clearance above the ground, so nothing inside it may grow into them.
+        bandInner: 200,
+        bandOuter: 550,
+        bandCeiling: 64, // m, tallest thing allowed under the course
       };
 
-      /**
-       * One tree as one geometry: a brown cylinder trunk plus three stacked cones.
-       * The colours live in the vertices, so the whole forest fits in a single
-       * InstancedMesh with a single material.
-       */
-      function buildTreeGeometry() {
-        const parts = [];
-        const paint = (geo, hex) => {
-          const n = geo.attributes.position.count;
-          const c = new THREE.Color(hex);
-          const arr = new Float32Array(n * 3);
-          for (let i = 0; i < n; i++) {
-            arr[i * 3] = c.r;
-            arr[i * 3 + 1] = c.g;
-            arr[i * 3 + 2] = c.b;
-          }
-          geo.setAttribute("color", new THREE.BufferAttribute(arr, 3));
-          return geo;
-        };
+      // Stable per-kind colours; each instance is then tinted a little either way.
+      const COVER_COLORS = {
+        trunk: 0x8a5a2b,
+        pineDark: 0x2e8b3e,
+        pineMid: 0x3aa04a,
+        pineLight: 0x4fb857,
+        crown: 0x5cbf3f,
+        crownSide: 0x4aae36,
+        bush: 0x67c946,
+        rock: 0xa9a3b8,
+      };
 
-        const trunk = new THREE.CylinderGeometry(2.1, 3.4, TREES.trunk, 6);
-        trunk.translate(0, TREES.trunk / 2, 0);
-        parts.push(paint(trunk, 0x6b4526));
-
-        // wide to narrow: an unmistakable conifer silhouette at any distance
-        const tiers = [
-          { r: 15, h: 21, y: TREES.trunk - 4, color: 0x3f7a39 },
-          { r: 11.5, h: 18, y: TREES.trunk + 6, color: 0x4a8c40 },
-          { r: 7.5, h: 15, y: TREES.trunk + 16, color: 0x57a04a },
-        ];
-        for (const t of tiers) {
-          const cone = new THREE.ConeGeometry(t.r, t.h, 7);
-          cone.translate(0, t.y + t.h / 2, 0);
-          parts.push(paint(cone, t.color));
+      /** Paint every vertex of a geometry one colour. */
+      function paint(geo, hex) {
+        const n = geo.attributes.position.count;
+        const c = new THREE.Color(hex);
+        const arr = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) {
+          arr[i * 3] = c.r;
+          arr[i * 3 + 1] = c.g;
+          arr[i * 3 + 2] = c.b;
         }
-        return mergeGeometries(parts);
+        geo.setAttribute("color", new THREE.BufferAttribute(arr, 3));
+        return geo;
       }
 
       /**
-       * Trees on concentric rings around the mountain: each ring sits TREES.spacing
-       * further out, and along every ring a tree stands every TREES.spacing metres.
-       * Each one drops onto the terrain, with scale, spin and tint varied so the
-       * grid underneath stops reading as a grid.
+       * A soft lump: an icosphere whose normals point straight out from its own
+       * centre, so two-tone shading draws one clean round shadow on it instead of a
+       * patchwork of facets.
        */
-      function plantForest() {
-        const spots = [];
-        for (let r = TREES.inner; r <= TREES.outer; r += TREES.spacing) {
-          const count = Math.max(1, Math.round((2 * Math.PI * r) / TREES.spacing));
-          const offset = (r / TREES.spacing) * 0.5; // stagger, or spokes appear
-          for (let i = 0; i < count; i++) {
-            const a = ((i + offset) / count) * Math.PI * 2;
-            const jx = (hash(i * 1.7, r * 0.13) - 0.5) * TREES.jitter * TREES.spacing;
-            const jz = (hash(r * 0.29, i * 2.3) - 0.5) * TREES.jitter * TREES.spacing;
-            const x = Math.cos(a) * r + jx;
-            const z = Math.sin(a) * r + jz;
-            const y = groundAt(x, z);
-            if (y < TREES.minGround || y > TREES.maxGround) continue;
-            if (slopeAt(x, z) > TREES.maxSlope) continue;
-            spots.push({
-              x,
-              y,
-              z,
-              // deterministic, so the forest looks the same on every reload
-              scale: 0.68 + hash(x * 0.37, z * 0.41) * 0.72,
-              turn: hash(z * 0.11, x * 0.19) * Math.PI * 2,
-              tilt: (hash(x * 0.53, z * 0.61) - 0.5) * 0.14,
-              tint: 0.86 + hash(x * 0.71, z * 0.83) * 0.3,
-            });
+      function lump(radius, detail, x, y, z, hex, squash = 1) {
+        const geo = new THREE.IcosahedronGeometry(1, detail);
+        const p = geo.attributes.position;
+        const nrm = geo.attributes.normal;
+        for (let i = 0; i < p.count; i++) {
+          const vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i);
+          const l = Math.hypot(vx, vy, vz) || 1;
+          nrm.setXYZ(i, vx / l, vy / l, vz / l);
+          p.setXYZ(i, vx * radius + x, vy * radius * squash + y, vz * radius + z);
+        }
+        return paint(geo, hex);
+      }
+
+      /** Merging needs one indexing scheme; the polyhedra are already unindexed. */
+      const unindexed = (geo) => (geo.index ? geo.toNonIndexed() : geo);
+      const mergeAll = (parts) => mergeGeometries(parts.map(unindexed));
+
+      /**
+       * Every kind of thing that grows or lies on the island, at scale 1. `foot` is
+       * the ground radius it claims when spacing things out; the rest describes the
+       * shape collision tests against, in the same units.
+       */
+      const KINDS = {
+        pine: {
+          foot: 13,
+          height: 47,
+          build() {
+            const trunk = new THREE.CylinderGeometry(2.1, 3.4, 17, 7);
+            trunk.translate(0, 8.5, 0);
+            const parts = [paint(trunk, COVER_COLORS.trunk)];
+            const tiers = [
+              { r: 15, h: 21, y: 13, c: COVER_COLORS.pineDark },
+              { r: 11.5, h: 18, y: 23, c: COVER_COLORS.pineMid },
+              { r: 7.5, h: 15, y: 33, c: COVER_COLORS.pineLight },
+            ];
+            for (const t of tiers) {
+              const cone = new THREE.ConeGeometry(t.r, t.h, 9);
+              cone.translate(0, t.y + t.h / 2, 0);
+              parts.push(paint(cone, t.c));
+            }
+            return mergeAll(parts);
+          },
+        },
+
+        // the round-topped street tree of a cartoon suburb: a stick and a big green ball
+        round: {
+          foot: 14,
+          height: 41,
+          trunkTop: 17,
+          trunkRadius: 3,
+          crownY: 27,
+          crownRadius: 14,
+          build() {
+            const trunk = new THREE.CylinderGeometry(1.9, 3, 19, 7);
+            trunk.translate(0, 9.5, 0);
+            return mergeAll([
+              paint(trunk, COVER_COLORS.trunk),
+              // detail 1 is enough: the normals keep the shading round, and a slightly
+              // lumpy silhouette under an ink line is how a drawn tree looks anyway
+              lump(13, 1, 0, 27, 0, COVER_COLORS.crown),
+              lump(8.5, 0, 9, 22, 3, COVER_COLORS.crownSide),
+              lump(8, 0, -7, 23, -5, COVER_COLORS.crownSide),
+            ]);
+          },
+        },
+
+        bush: {
+          foot: 7,
+          height: 10,
+          ballY: 4,
+          ballRadius: 7,
+          build() {
+            // four hundred of these, a few metres across: the coarsest sphere will do
+            return mergeAll([
+              lump(5.5, 0, 0, 4, 0, COVER_COLORS.bush, 0.8),
+              lump(4, 0, 4.5, 3, 1.5, COVER_COLORS.bush, 0.8),
+              lump(3.8, 0, -4, 3, -1.5, COVER_COLORS.bush, 0.8),
+            ]);
+          },
+        },
+      };
+
+      /** A boulder: a lumpy icosphere, faceted on purpose — rock should look chipped. */
+      function buildRock(variant) {
+        const rnd = seeded(9001 + variant * 17);
+        const geo = new THREE.IcosahedronGeometry(1, 1);
+        const p = geo.attributes.position;
+        // displace shared corners identically, or the facets split open
+        const moved = new Map();
+        for (let i = 0; i < p.count; i++) {
+          const key = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;
+          if (!moved.has(key)) moved.set(key, 0.72 + rnd() * 0.5);
+          const k = moved.get(key);
+          p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k);
+        }
+        geo.computeVertexNormals();
+        return paint(geo, COVER_COLORS.rock);
+      }
+
+      const ROCK_VARIANTS = 3;
+
+      /** Size classes, as [min, max] scale — picked per spot, weighted by where it is. */
+      const SIZES = {
+        small: [0.5, 0.72],
+        medium: [0.85, 1.1],
+        large: [1.3, 1.55],
+      };
+
+      /**
+       * What grows at a given spot. Height above the sea decides the zone: rocks and
+       * the odd bush on the beach, a mixed forest of every size on the plain, pines
+       * and boulders thinning out up the flank, bare rock at the top.
+       */
+      function chooseCover(h, slope, rnd) {
+        const roll = rnd();
+        if (h < 4) return null; // wet sand and surf
+        if (h < 20) {
+          if (roll < 0.28) return { kind: "rock", size: rnd() < 0.8 ? "small" : "medium" };
+          if (roll < 0.5) return { kind: "bush", size: "medium" };
+          return null; // an open beach reads as a beach
+        }
+        if (h < 190 && slope < 0.95) {
+          const size = rnd() < 0.3 ? "small" : rnd() < 0.72 ? "medium" : "large";
+          if (roll < 0.36) return { kind: "round", size };
+          if (roll < 0.66) return { kind: "pine", size };
+          if (roll < 0.9) return { kind: "bush", size: "medium" };
+          return { kind: "rock", size: rnd() < 0.75 ? "small" : "medium" };
+        }
+        if (h < 250) {
+          if (roll < 0.4) return { kind: "rock", size: rnd() < 0.5 ? "medium" : "large" };
+          if (roll < 0.62) return { kind: "pine", size: "small" };
+          return null;
+        }
+        return roll < 0.35 ? { kind: "rock", size: rnd() < 0.6 ? "medium" : "large" } : null;
+      }
+
+      /** Rock sizes are in metres of radius rather than a multiplier of a template. */
+      const ROCK_RADIUS = { small: [3, 6], medium: [8, 13], large: [17, 27] };
+
+      /**
+       * Scatter the island. One candidate per grid cell, placed anywhere inside it,
+       * so the spacing is irregular but there are no holes; a spot is refused only
+       * when it would overlap something already standing. Everything sits on the
+       * height field, and anything inside the gate band is kept below the course.
+       */
+      function scatterCover() {
+        const rnd = seeded(20260917);
+        const R = ISLAND.radius * 1.08;
+        const placed = [];
+        const grid = new Map();
+        const key = (cx, cz) => `${cx},${cz}`;
+
+        const fits = (x, z, foot) => {
+          const cx = Math.floor(x / COVER.cell);
+          const cz = Math.floor(z / COVER.cell);
+          for (let dx = -2; dx <= 2; dx++) {
+            for (let dz = -2; dz <= 2; dz++) {
+              for (const o of grid.get(key(cx + dx, cz + dz)) ?? []) {
+                const min = (o.foot + foot) * COVER.gap;
+                if ((o.x - x) ** 2 + (o.z - z) ** 2 < min * min) return false;
+              }
+            }
+          }
+          return true;
+        };
+
+        for (let gx = -R; gx < R; gx += COVER.cell) {
+          for (let gz = -R; gz < R; gz += COVER.cell) {
+            if (rnd() < COVER.bare) continue;
+            for (let t = 0; t < COVER.tries; t++) {
+              const x = gx + rnd() * COVER.cell;
+              const z = gz + rnd() * COVER.cell;
+              const h = groundAt(x, z);
+              const pick = chooseCover(h, slopeAt(x, z), rnd);
+              if (!pick) break;
+
+              let item;
+              if (pick.kind === "rock") {
+                const [lo, hi] = ROCK_RADIUS[pick.size];
+                const r = lo + rnd() * (hi - lo);
+                item = {
+                  kind: "rock",
+                  variant: Math.floor(rnd() * ROCK_VARIANTS),
+                  x, z, y: h,
+                  rx: r * (0.85 + rnd() * 0.3),
+                  ry: r * (0.55 + rnd() * 0.25),
+                  rz: r * (0.8 + rnd() * 0.3),
+                  foot: r,
+                  turn: rnd() * Math.PI * 2,
+                  tint: 0.9 + rnd() * 0.2,
+                };
+                // bedded in, so it grows out of the slope instead of perching on it
+                item.y = h - item.ry * 0.3;
+              } else {
+                const def = KINDS[pick.kind];
+                const [lo, hi] = SIZES[pick.size];
+                let scale = lo + rnd() * (hi - lo);
+                const r = Math.hypot(x, z);
+                if (r > COVER.bandInner && r < COVER.bandOuter) {
+                  scale = Math.min(scale, COVER.bandCeiling / def.height);
+                }
+                item = {
+                  kind: pick.kind,
+                  x, z, y: h - 1.2 * scale,
+                  scale,
+                  foot: def.foot * scale,
+                  turn: rnd() * Math.PI * 2,
+                  tilt: (rnd() - 0.5) * 0.12,
+                  tint: 0.88 + rnd() * 0.24,
+                };
+              }
+
+              if (!fits(x, z, item.foot)) continue;
+              placed.push(item);
+              const k = key(Math.floor(x / COVER.cell), Math.floor(z / COVER.cell));
+              if (!grid.has(k)) grid.set(k, []);
+              grid.get(k).push(item);
+              break;
+            }
           }
         }
+        return placed;
+      }
 
-        const mesh = new THREE.InstancedMesh(
-          buildTreeGeometry(),
-          new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: TOON }),
-          spots.length,
-        );
-        mesh.frustumCulled = false;
+      /** One InstancedMesh per shape, so the whole island is a handful of draw calls. */
+      function buildCover(items) {
+        const groups = new Map();
+        for (const it of items) {
+          const id = it.kind === "rock" ? `rock${it.variant}` : it.kind;
+          if (!groups.has(id)) groups.set(id, []);
+          groups.get(id).push(it);
+        }
 
+        const material = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: TOON2 });
+        const meshes = [];
         const m = new THREE.Matrix4();
         const q = new THREE.Quaternion();
         const e = new THREE.Euler();
         const p = new THREE.Vector3();
         const s = new THREE.Vector3();
         const tint = new THREE.Color();
-        spots.forEach((spot, i) => {
-          e.set(spot.tilt, spot.turn, spot.tilt * 0.8);
-          q.setFromEuler(e);
-          s.set(spot.scale, spot.scale * (0.9 + spot.tint * 0.15), spot.scale);
-          p.set(spot.x, spot.y - 1.5 * spot.scale, spot.z);
-          m.compose(p, q, s);
-          mesh.setMatrixAt(i, m);
-          mesh.setColorAt(i, tint.setScalar(spot.tint));
-        });
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.instanceColor.needsUpdate = true;
 
-        return { mesh, spots };
+        for (const [id, list] of groups) {
+          const geo = id.startsWith("rock") ? buildRock(Number(id.slice(4))) : KINDS[id].build();
+          const mesh = new THREE.InstancedMesh(geo, material, list.length);
+          mesh.frustumCulled = false;
+          list.forEach((it, i) => {
+            if (it.kind === "rock") {
+              e.set(0, it.turn, 0);
+              s.set(it.rx, it.ry, it.rz);
+            } else {
+              e.set(it.tilt, it.turn, it.tilt * 0.8);
+              s.set(it.scale, it.scale * (0.92 + (it.tint - 0.88) * 0.5), it.scale);
+            }
+            tint.setScalar(it.tint);
+            q.setFromEuler(e);
+            p.set(it.x, it.y, it.z);
+            m.compose(p, q, s);
+            mesh.setMatrixAt(i, m);
+            mesh.setColorAt(i, tint);
+          });
+          mesh.instanceMatrix.needsUpdate = true;
+          mesh.instanceColor.needsUpdate = true;
+          meshes.push(mesh);
+        }
+        return meshes;
+      }
+
+      /**
+       * Collision against the ground cover. Each thing is filed in a coarse grid so a
+       * physics step only tests what is actually near the bird, not the whole island.
+       */
+      class CoverCollider {
+        constructor(items) {
+          this.cell = 60; // m — wider than the largest reach, so 3×3 cells always suffice
+          this.cells = new Map();
+          for (const it of items) {
+            const k = `${Math.floor(it.x / this.cell)},${Math.floor(it.z / this.cell)}`;
+            if (!this.cells.has(k)) this.cells.set(k, []);
+            this.cells.get(k).push(it);
+          }
+        }
+
+        /** Returns "tree", "rock" or null. `pad` is the bird's own clearance. */
+        hit(pos, pad) {
+          const cx = Math.floor(pos.x / this.cell);
+          const cz = Math.floor(pos.z / this.cell);
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              const list = this.cells.get(`${cx + dx},${cz + dz}`);
+              if (!list) continue;
+              for (const it of list) {
+                const reason = this.#test(it, pos, pad);
+                if (reason) return reason;
+              }
+            }
+          }
+          return null;
+        }
+
+        #test(it, pos, pad) {
+          const dx = pos.x - it.x;
+          const dz = pos.z - it.z;
+          const flat2 = dx * dx + dz * dz;
+
+          if (it.kind === "rock") {
+            // an ellipsoid, grown by the clearance on every axis
+            const ex = dx / (it.rx + pad);
+            const ey = (pos.y - it.y) / (it.ry + pad);
+            const ez = dz / (it.rz + pad);
+            return ex * ex + ey * ey + ez * ez < 1 ? "rock" : null;
+          }
+
+          const s = it.scale;
+          const up = pos.y - it.y;
+          if (up < 0 || up > KINDS[it.kind].height * s + pad) return null;
+
+          if (it.kind === "pine") {
+            // the canopy is a cone, so the hitbox narrows with height too — a fat
+            // cylinder would swat birds clearing the top by ten metres
+            const rel = up / (KINDS.pine.height * s);
+            const reach = 15 * s * (1 - 0.75 * Math.max(rel, 0)) + pad;
+            return flat2 < reach * reach ? "tree" : null;
+          }
+
+          const def = KINDS[it.kind];
+          if (it.kind === "round") {
+            const trunk = def.trunkRadius * s + pad;
+            if (up < def.trunkTop * s && flat2 < trunk * trunk) return "tree";
+            const dy = up - def.crownY * s;
+            const crown = def.crownRadius * s + pad;
+            return flat2 + dy * dy < crown * crown ? "tree" : null;
+          }
+
+          // bush: one squat ball
+          const dy = (up - def.ballY * s) * 1.25;
+          const ball = def.ballRadius * s + pad;
+          return flat2 + dy * dy < ball * ball ? "tree" : null;
+        }
       }
 
       /* ---------- thermals ---------- */
@@ -1435,9 +1899,9 @@
           scene.add(this.terrain);
           scene.add(buildOcean());
 
-          const forest = plantForest();
-          scene.add(forest.mesh);
-          this.trees = forest.spots;
+          this.cover = scatterCover();
+          for (const mesh of buildCover(this.cover)) scene.add(mesh);
+          this.collider = new CoverCollider(this.cover);
 
           this.thermals = buildThermals();
           this._push = new THREE.Vector3();
@@ -1463,22 +1927,7 @@
         collide(pos) {
           if (pos.y < ISLAND.clearance) return "water";
           if (pos.y < groundAt(pos.x, pos.z) + ISLAND.clearance) return "ground";
-
-          // ~200 trees, so a flat scan beats any structure that has to be maintained
-          for (const t of this.trees) {
-            // how far up this tree the bird is: 0 at the roots, 1 at the tip
-            const rel = (pos.y - t.y) / (TREES.height * t.scale);
-            if (rel > 1) continue;
-            // the canopy is a cone, so the hitbox narrows with height too — a fat
-            // cylinder would swat birds clearing the top by ten metres
-            const taper = 1 - 0.75 * Math.max(rel, 0);
-            const reach = TREES.canopy * t.scale * taper + ISLAND.clearance;
-            const dx = pos.x - t.x;
-            if (Math.abs(dx) > reach) continue;
-            const dz = pos.z - t.z;
-            if (dx * dx + dz * dz < reach * reach) return "tree";
-          }
-          return null;
+          return this.collider.hit(pos, ISLAND.clearance);
         }
 
         /**
@@ -2071,7 +2520,9 @@
         step: 0.2, // rad between gates — about 31 to a lap, roughly 100 m apart
         radius: 375, // mean distance from the peak
         swing: 150, // how far in and out the line weaves
-        clearance: 62, // metres above the ground beneath the gate
+        // high enough that the tallest tree allowed in the gate band (COVER.bandCeiling)
+        // still passes under the rim of the lowest hoop
+        clearance: 92, // metres above the ground beneath the gate
         lift: 46, // extra height swing along the course
       };
 
@@ -2548,11 +2999,25 @@
         flapPeakDecay: 0.9, // rad/s the remembered peak sags toward the current angle
         // reference stroke: a committed ~100° beat at a brisk cadence scores 1.0, so a
         // half-hearted flutter reads weak and a full-arm heave reads strong
-        flapRefSweep: 1.7, // rad of travel
-        flapRefSpeed: 9, // rad/s downstroke speed
+        // Measured against a synthetic ±30° beat, the old 1.7 rad / 9 rad/s reference
+        // scored 0.28 — a real wingbeat that lifted the bird eight metres in eight
+        // seconds where a key press lifted it ninety. Most people do not heave a full
+        // 100° at speed in front of a webcam, so an ordinary stroke now scores near 1
+        // and the floors stop a modest one from rounding down to nothing.
+        flapRefSweep: 1.2, // rad of travel
+        flapRefSpeed: 5.5, // rad/s downstroke speed
+        flapSweepFloor: 0.6,
+        flapSpeedFloor: 0.65,
         flapMinExtension: 0.5, // arms must be at least this straight to count
         flapCooldown: 0.16, // s
         flapDecay: 0.85, // s, how fast the "recently flapping" signal fades
+
+        // A full downstroke ends with the hands beside the hips, which is exactly the
+        // tuck pose — so without this every strong beat also folded the wings and,
+        // since the dive pitches the nose over, actively steered the bird down. Tuck
+        // is ignored while the arms are sweeping and for a moment after.
+        tuckHoldoff: 0.4, // s after any stroke before a tuck can register
+        tuckAttack: 0.14, // s to engage a tuck — slower than letting go of one
 
         spreadGlide: 0.62, // lateral reach/arm-length where gliding begins
         spreadTuck: 0.26, // ...and where a full tuck is reached
@@ -2721,6 +3186,7 @@
           this.strokeVel = 0;
           this.flapCooldown = 0;
           this.flapActivity = 0;
+          this.beatHold = 0; // s left during which a tuck reading is a wingbeat, not a tuck
 
           this.lastResult = null;
           this.sinceSample = 0;
@@ -2793,6 +3259,7 @@
         update(result, dt) {
           dt = clamp(dt, 1 / 240, 1 / 15);
           this.flapCooldown = Math.max(0, this.flapCooldown - dt);
+          this.beatHold = Math.max(0, this.beatHold - dt);
           this.flapActivity *= Math.exp(-dt / TUNE.flapDecay);
 
           // Inference only runs when the webcam produces a new frame, so the tracker
@@ -2821,7 +3288,10 @@
           ease("wingAngle", slow ? TUNE.lostTau : TUNE.easeTau);
           ease("spread", slow ? TUNE.lostTau : TUNE.easeTau);
           ease("extension", slow ? TUNE.lostTau : TUNE.easeTau);
-          ease("tuck", slow ? TUNE.lostTau : TUNE.easeTau);
+          // tucking in eases on more slowly than it lets go, so a pose the arms only
+          // pass through on their way somewhere never reaches the wings
+          const tucking = this.target.tuck > this.smooth.tuck;
+          ease("tuck", slow ? TUNE.lostTau : tucking ? TUNE.tuckAttack : TUNE.easeTau);
           ease("glide", slow ? TUNE.lostTau : TUNE.easeTau);
           ease("steer", slow ? TUNE.lostTau : TUNE.steerTau);
 
@@ -2889,8 +3359,8 @@
               const sweep = this.strokeTop - this.strokeLow;
               if (sweep >= TUNE.flapMinSweep && this.flapCooldown === 0) {
                 const power =
-                  clamp(sweep / TUNE.flapRefSweep, 0.25, 1.3) *
-                  clamp(this.strokeVel / TUNE.flapRefSpeed, 0.3, 1.25);
+                  clamp(sweep / TUNE.flapRefSweep, TUNE.flapSweepFloor, 1.3) *
+                  clamp(this.strokeVel / TUNE.flapRefSpeed, TUNE.flapSpeedFloor, 1.25);
                 flap = { power: clamp(power, 0.15, 1.35), sweep };
                 this.flapActivity = Math.max(this.flapActivity, clamp(power, 0, 1));
                 this.flapCooldown = TUNE.flapCooldown;
@@ -2901,7 +3371,11 @@
           }
 
           /* --- tuck / glide, as continuous blends rather than exclusive states --- */
-          const tuck = invLerp(TUNE.spreadGlide, TUNE.spreadTuck, spread);
+          // arms sweeping fast in either direction are beating, whatever their reach
+          if (this.stroking || flap || Math.abs(wingVel) > TUNE.flapMinSpeed) {
+            this.beatHold = TUNE.tuckHoldoff;
+          }
+          const tuck = this.beatHold > 0 ? 0 : invLerp(TUNE.spreadGlide, TUNE.spreadTuck, spread);
           const armsOut = smoothstep(TUNE.spreadOutLo, TUNE.spreadOutHi, spread);
           const level = 1 - clamp(Math.abs(wingAngle) / TUNE.glideLevelBand, 0, 1);
           const glide = armsOut * level * (1 - clamp(this.flapActivity, 0, 1));
@@ -3279,6 +3753,7 @@
           water: "Ditched in the sea",
           ground: "Hit the deck",
           tree: "Flew into a tree",
+          rock: "Hit a rock",
         }[session.cause] ?? "Down";
 
         el.card.innerHTML = `
@@ -3647,7 +4122,7 @@
           drawOverlay(el.overlay, lastResult, gesture);
         }
 
-        gfx.renderer.render(gfx.scene, gfx.camera);
+        gfx.draw();
       }
 
       boot();
