@@ -15,7 +15,11 @@
         --panel: rgba(30, 14, 44, 0.62);
         --stroke: rgba(255, 244, 226, 0.22);
         --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
-        --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+        /* the front-of-house palette: near-black on glass, one blue for the action */
+        --text: #1d1d1f;
+        --text2: #6e6e73;
+        --accent: #0071e3;
       }
 
       * {
@@ -139,6 +143,35 @@
         display: none;
       }
 
+      /* the clock in a timed mode, under the score */
+      .clock {
+        position: absolute;
+        top: 96px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-family: var(--mono);
+        font-size: 26px;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em;
+        color: var(--cream);
+        text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
+      }
+
+      .clock.urgent {
+        color: var(--dive);
+        animation: clock-tick 1s steps(2, jump-none) infinite;
+      }
+
+      .clock[hidden] {
+        display: none;
+      }
+
+      @keyframes clock-tick {
+        50% {
+          opacity: 0.45;
+        }
+      }
+
       /* one line, then it fades — a scrape should be noted, not dwelt on. The fade is
          a keyframe animation rather than a per-frame timer so that it always finishes,
          even if the run pauses or ends halfway through it. */
@@ -159,6 +192,39 @@
 
       .recovery.show {
         animation: recovery-flash 1.5s ease forwards;
+      }
+
+      /* what a ring just paid, rising away from where you flew through it */
+      .ring-score {
+        position: absolute;
+        top: 46%;
+        left: 50%;
+        font-family: var(--mono);
+        font-size: 19px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        color: var(--flap);
+        text-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+        pointer-events: none;
+        animation: ring-score 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+      }
+
+      @keyframes ring-score {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, 0) scale(0.7);
+        }
+        18% {
+          opacity: 1;
+          transform: translate(-50%, -18px) scale(1.12);
+        }
+        40% {
+          transform: translate(-50%, -30px) scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -74px) scale(1);
+        }
       }
 
       @keyframes recovery-flash {
@@ -387,18 +453,62 @@
 
       /* ---------- screens ---------- */
 
+      /* ==========================================================================
+       * The screens in front of the game — title, calibration, pause, game over.
+       *
+       * Deliberately not dressed like the game: where the island is saturated and
+       * outlined, this is quiet. Frosted glass over the live scene, system type, one
+       * blue for the thing you are meant to press, and a lot of air. The HUD above
+       * keeps the game's own voice; this is the part you read.
+       * ========================================================================== */
+      /* one small control that outlives every card and screen */
+      .mute {
+        position: fixed;
+        top: 18px;
+        left: 18px;
+        z-index: 20;
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        appearance: none;
+        cursor: pointer;
+        border: 0.5px solid rgba(0, 0, 0, 0.08);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 2px 10px rgba(20, 24, 40, 0.12);
+        color: var(--text2);
+        font: inherit;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        transition: transform 0.15s, background 0.15s;
+      }
+
+      .mute:hover {
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      .mute:active {
+        transform: scale(0.94);
+      }
+
       .screen {
         position: fixed;
         inset: 0;
         display: grid;
         place-items: center;
         padding: 24px;
-        background: radial-gradient(110% 80% at 50% 100%, rgba(255, 138, 92, 0.22), transparent 62%),
-          radial-gradient(120% 90% at 50% 0%, rgba(120, 60, 160, 0.3), transparent 60%),
-          rgba(20, 10, 32, 0.76);
-        backdrop-filter: blur(14px);
+        /* a light scrim, so the island stays visible through the glass */
+        background: rgba(244, 246, 250, 0.42);
+        backdrop-filter: saturate(180%) blur(28px);
+        -webkit-backdrop-filter: saturate(180%) blur(28px);
         z-index: 10;
-        transition: opacity 0.35s ease;
+        transition: opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1);
       }
 
       .screen[hidden] {
@@ -411,39 +521,55 @@
       }
 
       .screen-card {
-        width: min(760px, 100%);
+        width: min(780px, 100%);
         max-height: 100%;
         overflow-y: auto;
+        scrollbar-width: none; /* the card scrolls on a short screen, but quietly */
+        padding: 28px 34px 22px;
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 0.5px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 24px 70px rgba(20, 24, 40, 0.18), 0 2px 6px rgba(20, 24, 40, 0.06);
+        color: var(--text);
         text-align: center;
-        animation: rise 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+        animation: rise 0.55s cubic-bezier(0.32, 0.72, 0, 1) both;
+      }
+
+      .screen-card::-webkit-scrollbar {
+        display: none;
+      }
+
+      @media (max-width: 560px) {
+        .screen-card {
+          padding: 30px 22px 26px;
+          border-radius: 22px;
+        }
       }
 
       .title {
         margin: 0;
-        font-size: clamp(48px, 9vw, 92px);
-        font-weight: 200;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        background: linear-gradient(180deg, #fff2dd, #ff9a4d 70%, #e2562f);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+        font-size: clamp(30px, 5.4vw, 46px);
+        font-weight: 600;
+        letter-spacing: -0.022em;
+        line-height: 1.05;
+        color: var(--text);
       }
 
       .subtitle {
-        margin: 4px 0 34px;
-        font-size: 15px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--muted);
+        margin: 6px 0 16px;
+        font-size: 16px;
+        line-height: 1.45;
+        letter-spacing: -0.01em;
+        color: var(--text2);
       }
 
+      /* ---- the four moves ---- */
       .moves {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 12px;
-        margin-bottom: 34px;
-        text-align: left;
+        gap: 8px;
+        margin-bottom: 14px;
+        text-align: center;
       }
 
       @media (max-width: 680px) {
@@ -453,30 +579,30 @@
       }
 
       .move {
-        padding: 14px;
-        border-radius: 16px;
-        border: 1px solid var(--stroke);
-        background: rgba(255, 244, 226, 0.05);
+        padding: 10px 8px;
+        border-radius: 18px;
+        background: rgba(120, 130, 155, 0.09);
       }
 
       .move b {
         display: block;
-        font-family: var(--mono);
-        font-size: 12px;
-        letter-spacing: 0.16em;
-        margin-bottom: 4px;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin-bottom: 3px;
+        color: var(--text);
       }
 
       .move span {
         font-size: 11px;
-        line-height: 1.5;
-        color: var(--muted);
+        line-height: 1.35;
+        color: var(--text2);
       }
 
       .move-art {
-        height: 52px;
-        margin-bottom: 10px;
-        opacity: 0.9;
+        height: 32px;
+        margin-bottom: 6px;
+        opacity: 0.85;
       }
 
       .move-art svg {
@@ -486,20 +612,212 @@
         margin: 0 auto;
       }
 
-      .status {
-        min-height: 20px;
+      /* ---- character picker ---- */
+      .picker-label {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--text2);
+        margin-bottom: 10px;
+      }
+
+      .birds {
+        display: grid;
+        /* five birds and counting: let the row reflow rather than pinning a count */
+        grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+        text-align: left;
+      }
+
+      .bird-card {
+        pointer-events: auto;
+        cursor: pointer;
+        appearance: none;
+        text-align: left;
+        color: inherit;
+        font: inherit;
+        padding: 13px;
+        border-radius: 18px;
+        border: 1.5px solid transparent;
+        background: rgba(120, 130, 155, 0.09);
+        transition: background 0.18s, border-color 0.18s, transform 0.18s;
+      }
+
+      .bird-card:hover:not([data-locked]) {
+        background: rgba(120, 130, 155, 0.16);
+      }
+
+      .bird-card:active:not([data-locked]) {
+        transform: scale(0.97);
+      }
+
+      .bird-card[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: rgba(0, 113, 227, 0.09);
+      }
+
+      .bird-swatch {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 9px;
+      }
+
+      .bird-swatch i {
+        width: 15px;
+        height: 15px;
+        border-radius: 999px;
+        box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.18);
+      }
+
+      .bird-card b {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin-bottom: 2px;
+      }
+
+      .bird-card em {
+        display: block;
+        font-style: normal;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--accent);
+        margin-bottom: 5px;
+      }
+
+      .bird-card span {
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--text2);
+      }
+
+      .bird-card[data-locked] {
+        cursor: default;
+        opacity: 0.6;
+      }
+
+      .bird-card[data-locked] .bird-swatch i {
+        filter: grayscale(1);
+      }
+
+      .bird-card[data-locked] em {
+        color: var(--text2);
+      }
+
+      .locked-at {
+        display: block;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        color: var(--text2);
+        margin-bottom: 6px;
+      }
+
+      .lock-bar {
+        display: block;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(120, 130, 155, 0.22);
+        overflow: hidden;
+      }
+
+      .lock-bar i {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+        background: var(--accent);
+      }
+
+      /* ---- how you want to fly: one control, four options, one selected ---- */
+      .segmented {
+        display: inline-flex;
+        gap: 2px;
+        padding: 2px;
+        margin-bottom: 8px;
+        border-radius: 12px;
+        background: rgba(120, 130, 155, 0.13);
+      }
+
+      .segment {
+        pointer-events: auto;
+        appearance: none;
+        border: 0;
+        cursor: pointer;
+        padding: 7px 16px;
+        border-radius: 10px;
+        background: none;
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        transition: background 0.18s, box-shadow 0.18s;
+      }
+
+      .segment[aria-pressed="true"] {
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(20, 24, 40, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+      }
+
+      .mode-blurb {
+        min-height: 17px;
+        margin: 0 0 14px;
+        font-size: 13px;
+        color: var(--text2);
+      }
+
+      /* ---- what you just earned ---- */
+      .unlock {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        max-width: 380px;
+        margin: 0 auto 18px;
+        padding: 13px 16px;
+        border-radius: 18px;
+        background: rgba(0, 113, 227, 0.1);
+        text-align: left;
+      }
+
+      .unlock b {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--accent);
+      }
+
+      .unlock span {
+        font-size: 12px;
+        color: var(--text2);
+      }
+
+      .next-unlock {
         margin: 0 0 18px;
         font-size: 13px;
-        letter-spacing: 0.05em;
-        color: var(--muted);
+        color: var(--text2);
+      }
+
+      .next-unlock b {
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      /* ---- status line and buttons ---- */
+      .status {
+        min-height: 18px;
+        margin: 0 0 12px;
+        font-size: 14px;
+        line-height: 1.45;
+        color: var(--text2);
       }
 
       .status.warn {
-        color: var(--flap);
+        color: #b25000;
       }
 
       .status.error {
-        color: var(--dive);
+        color: #c1121f;
       }
 
       .btn {
@@ -507,70 +825,67 @@
         appearance: none;
         border: 0;
         cursor: pointer;
-        padding: 15px 44px;
-        border-radius: 999px;
-        font-family: var(--mono);
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-        color: #2a1206;
-        background: linear-gradient(180deg, #ffc772, #ff8a3c);
-        box-shadow: 0 10px 34px rgba(255, 138, 60, 0.35);
-        transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.2s;
+        padding: 13px 30px;
+        min-width: 150px;
+        border-radius: 980px;
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        color: #fff;
+        background: var(--accent);
+        transition: background 0.18s, transform 0.18s, opacity 0.2s;
       }
 
       .btn:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 16px 40px rgba(255, 138, 60, 0.45);
+        background: #0077ed;
+      }
+
+      .btn:active:not(:disabled) {
+        transform: scale(0.97);
       }
 
       .btn:disabled {
-        opacity: 0.4;
+        opacity: 0.35;
         cursor: default;
-        box-shadow: none;
       }
 
-      /* the second way in: quieter than the primary button, but a real choice */
       .btn-ghost {
-        color: var(--glide);
-        background: none;
-        border: 1px solid rgba(143, 227, 234, 0.4);
-        box-shadow: none;
-        padding: 13px 34px;
+        color: var(--accent);
+        background: rgba(0, 113, 227, 0.1);
       }
 
       .btn-ghost:hover:not(:disabled) {
-        border-color: rgba(143, 227, 234, 0.85);
-        box-shadow: 0 10px 30px rgba(73, 198, 216, 0.18);
+        background: rgba(0, 113, 227, 0.18);
       }
 
       .btn-row {
         display: flex;
-        gap: 12px;
+        gap: 10px;
         justify-content: center;
         align-items: center;
         flex-wrap: wrap;
       }
 
       .footnote {
-        margin: 20px 0 0;
-        font-size: 11px;
-        color: rgba(255, 244, 226, 0.36);
+        margin: 22px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: rgba(110, 110, 120, 0.85);
       }
 
       .picker {
         pointer-events: auto;
         display: block;
-        margin: 18px auto 0;
+        margin: 16px auto 0;
         padding: 9px 14px;
         max-width: 320px;
-        border-radius: 999px;
-        border: 1px solid var(--stroke);
-        background: rgba(12, 9, 16, 0.9);
-        color: var(--cream);
-        font-family: var(--sans);
-        font-size: 12px;
+        border-radius: 12px;
+        border: 0.5px solid rgba(0, 0, 0, 0.14);
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13px;
       }
 
       .picker[hidden] {
@@ -585,17 +900,20 @@
         padding: 0;
         cursor: pointer;
         font: inherit;
-        color: var(--glide);
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      .linkish:hover {
         text-decoration: underline;
       }
 
-      /* calibration ring */
-
+      /* ---- calibration ---- */
       .calibrate {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 22px;
+        gap: 20px;
       }
 
       .calibrate-ring {
@@ -604,52 +922,61 @@
         border-radius: 50%;
         display: grid;
         place-items: center;
-        background: conic-gradient(var(--flap) 0%, rgba(255, 244, 226, 0.14) 0);
+        background: conic-gradient(var(--accent) 0%, rgba(120, 130, 155, 0.18) 0);
       }
 
       .calibrate-ring::after {
         content: "";
-        width: 152px;
-        height: 152px;
+        width: 150px;
+        height: 150px;
         border-radius: 50%;
-        background: #14101b;
+        background: rgba(255, 255, 255, 0.96);
         grid-area: 1 / 1;
       }
 
       .calibrate-ring span {
         grid-area: 1 / 1;
         z-index: 1;
-        font-family: var(--mono);
-        font-size: 40px;
+        font-size: 46px;
         font-weight: 300;
+        letter-spacing: -0.02em;
         font-variant-numeric: tabular-nums;
+        color: var(--text);
       }
 
+      /* ---- the score you just made ---- */
       .score-final {
-        font-family: var(--mono);
-        font-size: 76px;
-        font-weight: 300;
-        color: var(--flap);
+        font-size: 78px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
         line-height: 1;
-        margin: 10px 0 6px;
+        margin: 8px 0 4px;
+      }
+
+      .score-final.record {
+        color: var(--accent);
       }
 
       .score-rows {
         display: flex;
         justify-content: center;
-        gap: 34px;
-        margin-bottom: 30px;
-        font-family: var(--mono);
-        font-size: 13px;
-        color: var(--muted);
+        gap: 30px;
+        flex-wrap: wrap;
+        margin-bottom: 26px;
+        font-size: 12px;
+        color: var(--text2);
       }
 
       .score-rows b {
         display: block;
-        font-size: 22px;
-        font-weight: 400;
-        color: var(--cream);
-        margin-bottom: 3px;
+        font-size: 21px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+        margin-bottom: 2px;
       }
 
       @keyframes rise {
@@ -682,6 +1009,7 @@
         </div>
         <div class="combo" id="combo" hidden><span id="combo-value">2</span>× chain</div>
         <div class="roam-badge" id="roam-badge" hidden>roam</div>
+        <div class="clock" id="clock" hidden>1:30</div>
       </div>
 
       <!-- roam mode only: says what just happened instead of ending the run -->
@@ -723,6 +1051,11 @@
       <div class="cam-warning" id="cam-warning" hidden>step back — full torso not visible</div>
     </div>
 
+    <!-- always reachable, on the title card or mid-flight -->
+    <button class="mute" id="mute-btn" type="button" aria-label="Sound on or off">
+      <span id="mute-icon">on</span>
+    </button>
+
     <div id="screen" class="screen">
       <div class="screen-card" id="screen-card">
         <h1 class="title">Thermal</h1>
@@ -737,7 +1070,7 @@
           <div class="move">
             <div class="move-art" data-art="glide"></div>
             <b>Glide</b>
-            <span>Hold your arms straight out. Recovers stamina, rides thermals.</span>
+            <span>Arms straight out. A little high stretches the glide, a little low presses on.</span>
           </div>
           <div class="move">
             <div class="move-art" data-art="dive"></div>
@@ -751,15 +1084,21 @@
           </div>
         </div>
 
+        <div class="picker-label">Pick your bird</div>
+        <div class="birds" id="birds"></div>
+        <p class="mode-blurb" id="bird-blurb"></p>
+
+        <div class="picker-label">How you want to fly</div>
+        <div class="segmented" id="modes" role="group"></div>
+        <p class="mode-blurb" id="mode-blurb"></p>
+
         <p class="status" id="status">Loading pose model…</p>
         <div class="btn-row">
           <button class="btn" id="primary-btn" disabled>Loading…</button>
-          <button class="btn btn-ghost" id="roam-btn" disabled>Roam</button>
         </div>
         <select class="picker" id="cam-picker" hidden></select>
         <p class="footnote">
           Needs a webcam. Stand back far enough that your hips and both hands stay in frame.
-          <br />Roam is the same island with nothing to lose: no crashes, no stamina, just flying.
         </p>
       </div>
     </div>
@@ -1080,9 +1419,60 @@
         resize();
         addEventListener("resize", resize);
 
+        /**
+         * This runs next to a pose model that wants the GPU too, on whatever laptop
+         * the player has. Rather than pick a resolution up front and hope, watch how
+         * long frames actually take and give pixels back when they get expensive.
+         * Two steps only, with a wide gap between them, so it settles instead of
+         * hunting: a full-resolution frame that is slow drops to 1x, and it only
+         * climbs back after a long stretch of comfortable frames.
+         */
+        // What is measured is how long a frame's work takes — reading the pose, moving
+        // the world, drawing it — not the time between frames. The gap between frames
+        // is also set by the display: on a 30 Hz screen, or in a throttled tab, every
+        // frame is 33 ms apart with almost nothing to do, and timing that read idle as
+        // trouble and threw resolution away. Work time only grows when work does.
+        const QUALITY = { heavy: 13, easy: 7, patience: 1.5, confidence: 6 }; // ms of work
+        const full = Math.min(devicePixelRatio, 2);
+        let smoothed = 8;
+        let overBudget = 0;
+        let underBudget = 0;
+        // a machine that sits exactly on the boundary would otherwise flip resolution
+        // every few seconds, which is far more distracting than simply staying low
+        let downgrades = 0;
+
+        const pace = (dt, workMs) => {
+          smoothed += (workMs - smoothed) * 0.08;
+          const ratio = renderer.getPixelRatio();
+          const heavy = smoothed > QUALITY.heavy;
+          const easy = smoothed < QUALITY.easy;
+
+          if (heavy && ratio > 1) {
+            overBudget += dt;
+            underBudget = 0;
+            if (overBudget > QUALITY.patience) {
+              renderer.setPixelRatio(1);
+              resize();
+              overBudget = 0;
+              downgrades++;
+            }
+          } else if (easy && ratio < full && downgrades < 2) {
+            underBudget += dt;
+            overBudget = 0;
+            if (underBudget > QUALITY.confidence) {
+              renderer.setPixelRatio(full);
+              resize();
+              underBudget = 0;
+            }
+          } else {
+            overBudget = 0;
+            underBudget = 0;
+          }
+        };
+
         const draw = () => ink.render(scene);
 
-        return { renderer, scene, camera, follow, dust, clouds, draw };
+        return { renderer, scene, camera, follow, dust, clouds, draw, pace };
       }
 
       class Clouds {
@@ -1146,7 +1536,8 @@
             return c + d;
           };
           // clouds sit above the bird, not in its face
-          const high = center.y + 150;
+          // never below the summit: flying low used to park clouds against the hillside
+          const high = Math.max(center.y + 150, ISLAND.peak + 70);
           for (const c of this.puffs) {
             c.position.x = wrap(c.position.x, center.x, this.span.x);
             c.position.y = wrap(c.position.y, high, this.span.y);
@@ -1275,7 +1666,7 @@
 
         update(dt, flight, speedNorm) {
           // lag the aim behind the real heading; turns still read, flap jolts do not
-          this.aim.lerp(this._scratch.copy(flight.vel).normalize(), 1 - Math.exp(-dt * 6.5));
+          this.aim.lerp(this._scratch.copy(flight.vel).normalize(), 1 - Math.exp(-dt * 9));
           this.aim.normalize();
 
           // drift the shake offset rather than resampling noise every frame, which at
@@ -1461,10 +1852,59 @@
        * Opaque and unlit: cartoon water is a single fill, and the surf line along the
        * coast is painted onto the land, where the sea meets it.
        */
+      /**
+       * Flat cartoon water: one blue, with short white dashes drifting across it the
+       * way a drawn sea is done. Over a plain fill you cannot tell how fast you are
+       * crossing the water; the dashes give the eye something to measure against.
+       * They fade out with distance, or the horizon turns into a moiré of stripes.
+       */
+      const WATER_FRAG = /* glsl */ `
+        uniform vec3 uWater, uFoam;
+        uniform float uTime;
+        varying vec3 vWorld;
+        #include <fog_pars_fragment>
+
+        void main() {
+          vec2 p = vWorld.xz * 0.019;
+          p.x += uTime * 0.06;
+          // two crossing waves, so the dashes break up instead of forming long lines
+          float wave = sin(p.x * 1.5 + sin(p.y * 1.1) * 1.8) * sin(p.y * 3.2 - uTime * 0.13);
+          float dash = smoothstep(0.72, 0.93, wave);
+
+          float dist = length(vWorld - cameraPosition);
+          dash *= 1.0 - smoothstep(260.0, 900.0, dist);
+
+          gl_FragColor = vec4(mix(uWater, uFoam, dash * 0.85), 1.0);
+          #include <fog_fragment>
+        }
+      `;
+
       function buildOcean() {
         const mesh = new THREE.Mesh(
           new THREE.CircleGeometry(4200, 96),
-          new THREE.MeshBasicMaterial({ color: 0x2c9be6 }),
+          new THREE.ShaderMaterial({
+            fog: true,
+            uniforms: THREE.UniformsUtils.merge([
+              THREE.UniformsLib.fog,
+              {
+                uWater: { value: new THREE.Color(0x2c9be6) },
+                uFoam: { value: new THREE.Color(0xd8f1ff) },
+                uTime: { value: 0 },
+              },
+            ]),
+            vertexShader: /* glsl */ `
+              varying vec3 vWorld;
+              #include <fog_pars_vertex>
+              void main() {
+                vec4 world = modelMatrix * vec4(position, 1.0);
+                vWorld = world.xyz;
+                vec4 mvPosition = viewMatrix * world;
+                gl_Position = projectionMatrix * mvPosition;
+                #include <fog_vertex>
+              }
+            `,
+            fragmentShader: WATER_FRAG,
+          }),
         );
         mesh.rotation.x = -Math.PI / 2;
         return mesh;
@@ -1891,19 +2331,116 @@
         return out;
       }
 
+      /**
+       * Thermals you can see. The game is named after them, and until now the only way
+       * to find one was to blunder into it — a column of lift is invisible air. These
+       * are the specks it carries up: seeds, dust, whatever the hillside gave it,
+       * spiralling as they rise. Not a marker drawn over the world, just what being in
+       * rising air looks like.
+       */
+      const THERMAL_VERT = /* glsl */ `
+        attribute vec3 aColumn;   // x, z, base height
+        attribute vec3 aMote;     // radius, phase, lift speed
+        uniform float uTime;
+        uniform float uHeight;
+        uniform float uScale;
+        varying float vAlpha;
+
+        void main() {
+          float climb = mod(uTime * aMote.z + aMote.y * uHeight, uHeight);
+          // the higher it goes the wider it drifts, and it turns as it rises
+          float spin = aMote.y * 6.28318 + climb * 0.012;
+          float spread = aMote.x * (0.45 + 0.55 * climb / uHeight);
+          vec3 p = vec3(
+            aColumn.x + cos(spin) * spread,
+            aColumn.z + climb,
+            aColumn.y + sin(spin) * spread
+          );
+
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          float dist = max(-mv.z, 0.001);
+          gl_Position = projectionMatrix * mv;
+          gl_PointSize = clamp(uScale / dist, 1.5, 20.0);
+          // fade in off the ground, out at the top, and away in the distance
+          float life = smoothstep(0.0, 0.12, climb / uHeight) * (1.0 - smoothstep(0.55, 1.0, climb / uHeight));
+          vAlpha = life * (1.0 - smoothstep(750.0, 1500.0, dist));
+        }
+      `;
+
+      const THERMAL_FRAG = /* glsl */ `
+        uniform vec3 uColor;
+        varying float vAlpha;
+        void main() {
+          float r = dot(gl_PointCoord - 0.5, gl_PointCoord - 0.5);
+          if (r > 0.25) discard;
+          gl_FragColor = vec4(uColor, (1.0 - r * 4.0) * vAlpha * 0.95);
+        }
+      `;
+
+      class Thermals {
+        constructor(scene, columns, perColumn = 130) {
+          this.height = 230; // how far up the motes are carried before they let go
+          const count = columns.length * perColumn;
+          const column = new Float32Array(count * 3);
+          const mote = new Float32Array(count * 3);
+
+          let i = 0;
+          for (const c of columns) {
+            for (let k = 0; k < perColumn; k++, i++) {
+              column[i * 3] = c.x;
+              column[i * 3 + 1] = c.z;
+              column[i * 3 + 2] = Math.max(groundAt(c.x, c.z), 0) + 6;
+              mote[i * 3] = c.radius * (0.25 + Math.random() * 0.7);
+              mote[i * 3 + 1] = Math.random();
+              mote[i * 3 + 2] = 14 + Math.random() * 12;
+            }
+          }
+
+          const geo = new THREE.BufferGeometry();
+          // every mote sits at the origin until the shader places it, so three has
+          // nothing sensible to cull against
+          geo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(count * 3), 3));
+          geo.setAttribute("aColumn", new THREE.Float32BufferAttribute(column, 3));
+          geo.setAttribute("aMote", new THREE.Float32BufferAttribute(mote, 3));
+
+          this.material = new THREE.ShaderMaterial({
+            vertexShader: THERMAL_VERT,
+            fragmentShader: THERMAL_FRAG,
+            uniforms: {
+              uTime: { value: 0 },
+              uHeight: { value: this.height },
+              uScale: { value: 1500 }, // a mote should read as a speck, not a stray pixel
+              uColor: { value: new THREE.Color(0xfffbe4) },
+            },
+            transparent: true,
+            depthWrite: false, // no depth, so the ink pass leaves them alone
+          });
+
+          this.points = new THREE.Points(geo, this.material);
+          this.points.frustumCulled = false;
+          scene.add(this.points);
+        }
+
+        update(time) {
+          this.material.uniforms.uTime.value = time;
+        }
+      }
+
       class Island {
         constructor(scene) {
           this.scene = scene;
           this.terrain = buildTerrain();
           this.terrain.frustumCulled = false;
           scene.add(this.terrain);
-          scene.add(buildOcean());
+          this.ocean = buildOcean();
+          scene.add(this.ocean);
 
           this.cover = scatterCover();
           for (const mesh of buildCover(this.cover)) scene.add(mesh);
           this.collider = new CoverCollider(this.cover);
 
           this.thermals = buildThermals();
+          this.columns = new Thermals(scene, this.thermals);
           this._push = new THREE.Vector3();
         }
 
@@ -1911,6 +2448,12 @@
 
         /** The island is built once, so there is nothing to stream in. */
         ensure() {}
+
+        /** Drift the wave dashes across the water, and keep the thermals rising. */
+        update(time) {
+          this.ocean.material.uniforms.uTime.value = time;
+          this.columns.update(time);
+        }
 
         updraftAt(pos) {
           for (const t of this.thermals) {
@@ -1975,16 +2518,24 @@
         dragTuck: 0.00016, // wings folded: almost nothing holds you back
         dragFlap: 0.0012, // extra cost of beating your wings
 
+        // Holding the wings above or below level asks the bird to climb or descend
+        // without spending a beat — the fine control between a flap and a tuck.
+        trimPitch: 8, // m/s2 along the lift axis, at a full arm angle
+
         // A stoop is not a fall. Tucking pitches the nose over under its own power
         // instead of waiting for gravity to swing the flight path down, which is the
         // difference between dropping out of the sky and diving at something.
         divePush: 34, // m/s² of nose-down, at a full tuck
 
         maxBank: 1.25, // rad
+        // The wing alone needs half a second of bank before the nose has gone
+        // anywhere. A bird also has a tail: this is its bite, applied the moment you
+        // lean, so the turn starts now and the bank carries it round.
+        steerYaw: 0.5, // rad/s of heading, at full lean
         // Critically damped roll: it eases in and settles without overshoot, where a
         // plain rate limit ramps at a constant speed and then stops dead.
-        bankResponse: 5.2, // rad/s natural frequency
-        bankMaxRate: 3.6, // rad/s ceiling, so a snapped shoulder cannot whip the bird
+        bankResponse: 7.4, // rad/s natural frequency
+        bankMaxRate: 5.2, // rad/s ceiling, so a snapped shoulder cannot whip the bird
         bankLiftCompensation: 0.75,
 
         flapImpulse: 7, // m/s along the wing's lift axis, at full power
@@ -1994,14 +2545,170 @@
         staminaRegenBase: 5,
         staminaRegenGlide: 15,
         exhaustedPower: 0.3,
+        thermalGain: 1, // how much of a column of rising air the wing actually takes
       };
+
+      /* ==========================================================================
+       * Characters: a different bird, and a different bird to fly
+       * ========================================================================== */
+      /**
+       * Each one repaints the bird and overwrites part of the flight table, so the
+       * choice is felt in the hands rather than just seen. The numbers left out are
+       * taken from FLIGHT, which stays the baseline every character is measured
+       * against — Swift changes nothing at all.
+       */
+      const CHARACTERS = [
+        {
+          id: "swift",
+          unlockAt: 0,
+          name: "Swift",
+          trait: "Even at everything",
+          blurb: "The all-rounder. Nothing is easy, nothing fights you.",
+          swatch: ["#3d9fd6", "#49c6d8", "#ffa62b"],
+          palette: {
+            back: 0x3d9fd6,
+            belly: 0xfff0c8,
+            wingTop: 0x49c6d8,
+            wingBand: 0xfff2d0,
+            wingTip: 0x2a6fa8,
+            wingUnder: 0x8fe3ea,
+            edge: 0x16304a,
+            beak: 0xffa62b,
+          },
+          flight: {},
+        },
+        {
+          id: "stoop",
+          unlockAt: 15,
+          name: "Stoop",
+          trait: "Dives hardest",
+          blurb: "Built to fall. Heavy in a climb, unbeatable coming down.",
+          swatch: ["#3b4256", "#e8622a", "#f6c453"],
+          palette: {
+            back: 0x39415a,
+            belly: 0xf3d9a8,
+            wingTop: 0x4c5570,
+            wingBand: 0xe8622a,
+            wingTip: 0x222838,
+            wingUnder: 0xc9743f,
+            edge: 0x140f1c,
+            beak: 0xf6c453,
+          },
+          flight: {
+            maxSpeed: 178,
+            divePush: 46,
+            dragTuck: 0.00011,
+            maxAuthority: 6.2, // and enough wing to pull out of it again
+            flapImpulse: 5.6,
+            flapCost: 14,
+            staminaRegenGlide: 12,
+          },
+        },
+        {
+          id: "drift",
+          unlockAt: 45,
+          name: "Drift",
+          trait: "Never gets tired",
+          blurb: "Long wings, deep lungs. Flaps cost almost nothing and the glide runs forever.",
+          swatch: ["#f2efe6", "#9aa7bd", "#ffcf4d"],
+          palette: {
+            back: 0xdfe4ee,
+            belly: 0xfffdf4,
+            wingTop: 0xc3cddd,
+            wingBand: 0xfffaf0,
+            wingTip: 0x7f8da6,
+            wingUnder: 0xeef3fb,
+            edge: 0x2b3448,
+            beak: 0xffcf4d,
+          },
+          flight: {
+            flapCost: 6,
+            staminaRegenBase: 9,
+            staminaRegenGlide: 24,
+            dragOpen: 0.00082, // a longer, flatter glide
+            flapImpulse: 7.8,
+            maxSpeed: 118,
+            bankResponse: 5.2, // ...but slow to come round
+            maxBank: 1.1,
+            steerYaw: 0.36,
+          },
+        },
+        {
+          id: "dart",
+          unlockAt: 100,
+          name: "Dart",
+          trait: "Turns on a coin",
+          blurb: "Small and twitchy. Rolls before you have finished thinking about it.",
+          swatch: ["#7d4bd1", "#3ecf8e", "#ff7ab8"],
+          palette: {
+            back: 0x7d4bd1,
+            belly: 0xffe9f4,
+            wingTop: 0x3ecf8e,
+            wingBand: 0xffe9f4,
+            wingTip: 0x4b2c86,
+            wingUnder: 0x9ff0cb,
+            edge: 0x21123f,
+            beak: 0xff7ab8,
+          },
+          flight: {
+            bankResponse: 11, // snaps into a turn
+            bankMaxRate: 7.5,
+            steerYaw: 0.75,
+            maxBank: 1.36, // any steeper and the wing cannot hold the height up
+            bankLiftCompensation: 0.97,
+            flapImpulse: 7.6,
+            flapCost: 13,
+            maxSpeed: 124,
+          },
+        },
+        {
+          id: "gale",
+          unlockAt: 200,
+          name: "Gale",
+          trait: "Lives off the air",
+          blurb: "Takes twice as much out of a thermal, and can barely climb without one.",
+          swatch: ["#e8534f", "#2d2a3a", "#ffd166"],
+          palette: {
+            back: 0xe8534f,
+            belly: 0xffe6c9,
+            wingTop: 0xd44a4a,
+            wingBand: 0xffd166,
+            wingTip: 0x2d2a3a,
+            wingUnder: 0xf7a68f,
+            edge: 0x1a1020,
+            beak: 0xffd166,
+          },
+          flight: {
+            thermalGain: 2.2,
+            flapImpulse: 5.2, // on its own wing it is the worst climber of the five
+            flapCost: 15,
+            dragOpen: 0.00092,
+            staminaRegenGlide: 20,
+            maxSpeed: 126,
+          },
+        },
+      ];
+
+      /**
+       * The flight numbers in force right now: the table above with one character's
+       * changes laid over it. Everything that flies reads this, never FLIGHT itself.
+       */
+      const ACTIVE = { ...FLIGHT };
+
+      const characterById = (id) => CHARACTERS.find((c) => c.id === id) ?? CHARACTERS[0];
+
+      function useCharacter(id) {
+        const chosen = characterById(id);
+        Object.assign(ACTIVE, FLIGHT, chosen.flight);
+        return chosen;
+      }
 
       const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
       class BirdFlight {
         constructor() {
           this.pos = new THREE.Vector3(0, 60, 0);
-          this.vel = new THREE.Vector3(0, 0, -FLIGHT.cruiseSpeed);
+          this.vel = new THREE.Vector3(0, 0, -ACTIVE.cruiseSpeed);
           this.bank = 0;
           this.bankVel = 0;
           this.stamina = 100;
@@ -2018,7 +2725,7 @@
 
         reset() {
           this.pos.set(0, 60, 0);
-          this.vel.set(0, 0, -FLIGHT.cruiseSpeed);
+          this.vel.set(0, 0, -ACTIVE.cruiseSpeed);
           this.bank = 0;
           this.bankVel = 0;
           this.stamina = 100;
@@ -2055,17 +2762,17 @@
           this.wingOpen = clamp(1 - tuck * 0.92, 0.08, 1);
 
           /* ---- bank chases the steer input ---- */
-          const targetBank = steer * FLIGHT.maxBank;
-          const w = FLIGHT.bankResponse;
+          const targetBank = steer * ACTIVE.maxBank;
+          const w = ACTIVE.bankResponse;
           const accel = w * w * (targetBank - this.bank) - 2 * w * this.bankVel;
-          this.bankVel = clamp(this.bankVel + accel * dt, -FLIGHT.bankMaxRate, FLIGHT.bankMaxRate);
-          this.bank = clamp(this.bank + this.bankVel * dt, -FLIGHT.maxBank, FLIGHT.maxBank);
+          this.bankVel = clamp(this.bankVel + accel * dt, -ACTIVE.bankMaxRate, ACTIVE.bankMaxRate);
+          this.bank = clamp(this.bank + this.bankVel * dt, -ACTIVE.maxBank, ACTIVE.maxBank);
 
           /* ---- flight axes ---- */
           let speed = this.vel.length();
           if (speed < 1e-3) {
-            this.vel.set(0, 0, -FLIGHT.minSpeed);
-            speed = FLIGHT.minSpeed;
+            this.vel.set(0, 0, -ACTIVE.minSpeed);
+            speed = ACTIVE.minSpeed;
           }
           const dir = this._dir.copy(this.vel).divideScalar(speed);
 
@@ -2077,62 +2784,75 @@
           lift.normalize().applyAxisAngle(dir, this.bank);
           this.liftAxis.copy(lift);
 
+          if (steer) this.vel.applyAxisAngle(UP, -steer * ACTIVE.steerYaw * dt);
+
           /* ---- forces ---- */
           // below stall speed the wing stops working, so slow flight punishes you
-          const stallFactor = clamp((speed - FLIGHT.stallSpeed * 0.55) / (FLIGHT.stallSpeed * 0.45), 0, 1);
+          const stallFactor = clamp((speed - ACTIVE.stallSpeed * 0.55) / (ACTIVE.stallSpeed * 0.45), 0, 1);
 
-          const speedRatio = speed / FLIGHT.cruiseSpeed;
-          const authority = Math.min(speedRatio * speedRatio, FLIGHT.maxAuthority);
+          const speedRatio = speed / ACTIVE.cruiseSpeed;
+          const authority = Math.min(speedRatio * speedRatio, ACTIVE.maxAuthority);
           const bankCos = Math.max(Math.cos(this.bank), 0.3);
-          const compensation = 1 + (1 / bankCos - 1) * FLIGHT.bankLiftCompensation;
+          const compensation = 1 + (1 / bankCos - 1) * ACTIVE.bankLiftCompensation;
 
           // what the wing would need to hold this flight path, plus a term pulling it
           // back toward level — asymmetric, so descents are arrested but climbs are not
-          const recovery = -this.vel.y * (this.vel.y < 0 ? FLIGHT.pullOutGain : FLIGHT.climbDamp);
-          const demand = FLIGHT.gravity * compensation + recovery;
-          const ceiling = FLIGHT.gravity * authority * compensation;
+          const recovery = -this.vel.y * (this.vel.y < 0 ? ACTIVE.pullOutGain : ACTIVE.climbDamp);
+          const demand = ACTIVE.gravity * compensation + recovery;
+          const ceiling = ACTIVE.gravity * authority * compensation;
           const liftMag = clamp(demand, 0, ceiling) * this.wingOpen * stallFactor;
 
           const drag =
-            FLIGHT.dragOpen * this.wingOpen +
-            FLIGHT.dragTuck * (1 - this.wingOpen) +
-            FLIGHT.dragFlap * (gesture.flapActivity ?? 0);
+            ACTIVE.dragOpen * this.wingOpen +
+            ACTIVE.dragTuck * (1 - this.wingOpen) +
+            ACTIVE.dragFlap * (gesture.flapActivity ?? 0);
 
-          this.vel.y -= FLIGHT.gravity * dt;
+          this.vel.y -= ACTIVE.gravity * dt;
           this.vel.addScaledVector(lift, liftMag * dt);
           this.vel.addScaledVector(dir, -drag * speed * speed * dt);
+
+          // The held arm angle trims the flight path up or down. Pulling up trades speed
+          // for height, so the authority to do it fades as the airspeed approaches the
+          // stall — otherwise holding the arms high quietly flies you into the ground.
+          // Pushing the nose down always works; gravity needs no permission.
+          const trim = gesture.tracked ? (gesture.trim ?? 0) : 0;
+          if (trim) {
+            const headroom = clamp((speed - ACTIVE.stallSpeed * 1.15) / (ACTIVE.cruiseSpeed - ACTIVE.stallSpeed), 0, 1);
+            const bite = trim > 0 ? trim * headroom : trim;
+            this.vel.addScaledVector(lift, ACTIVE.trimPitch * bite * dt);
+          }
 
           // negative lift while tucked: it rotates the flight path down rather than
           // adding speed directly, so the dive steepens first and the speed is what
           // gravity then does to a bird already pointing at the ground
-          if (tuck > 0) this.vel.addScaledVector(lift, -FLIGHT.divePush * tuck * dt);
+          if (tuck > 0) this.vel.addScaledVector(lift, -ACTIVE.divePush * tuck * dt);
 
           /* ---- flap ---- */
           if (gesture.flap) {
             let power = gesture.flap.power;
-            const cost = this.tireless ? 0 : FLIGHT.flapCost * power;
-            if (this.stamina < cost) power *= FLIGHT.exhaustedPower;
+            const cost = this.tireless ? 0 : ACTIVE.flapCost * power;
+            if (this.stamina < cost) power *= ACTIVE.exhaustedPower;
             this.stamina = Math.max(0, this.stamina - cost);
 
             // taper the kick as the climb steepens, otherwise flapping pitches up until it stalls
-            const headroom = clamp(1 - this.pitch / FLIGHT.maxClimbAngle, 0, 1);
-            this.vel.addScaledVector(lift, FLIGHT.flapImpulse * power * headroom);
-            this.vel.addScaledVector(dir, FLIGHT.flapForward * power);
+            const headroom = clamp(1 - this.pitch / ACTIVE.maxClimbAngle, 0, 1);
+            this.vel.addScaledVector(lift, ACTIVE.flapImpulse * power * headroom);
+            this.vel.addScaledVector(dir, ACTIVE.flapForward * power);
             this.flapPulse = Math.min(1, this.flapPulse + power);
           }
           this.flapPulse *= Math.exp(-dt / 0.22);
 
-          const regen = FLIGHT.staminaRegenBase + FLIGHT.staminaRegenGlide * glide;
+          const regen = ACTIVE.staminaRegenBase + ACTIVE.staminaRegenGlide * glide;
           this.stamina = Math.min(100, this.stamina + regen * dt);
 
           /* ---- thermals ---- */
           const updraft = world?.updraftAt(this.pos) ?? 0;
-          if (updraft > 0) this.vel.y += updraft * (0.45 + 0.9 * glide) * dt;
+          if (updraft > 0) this.vel.y += updraft * (0.45 + 0.9 * glide) * ACTIVE.thermalGain * dt;
 
           /* ---- integrate ---- */
           const newSpeed = this.vel.length();
-          if (newSpeed > FLIGHT.maxSpeed) this.vel.multiplyScalar(FLIGHT.maxSpeed / newSpeed);
-          else if (newSpeed < FLIGHT.minSpeed) this.vel.multiplyScalar(FLIGHT.minSpeed / newSpeed);
+          if (newSpeed > ACTIVE.maxSpeed) this.vel.multiplyScalar(ACTIVE.maxSpeed / newSpeed);
+          else if (newSpeed < ACTIVE.minSpeed) this.vel.multiplyScalar(ACTIVE.minSpeed / newSpeed);
 
           this.pos.addScaledVector(this.vel, dt);
         }
@@ -2156,6 +2876,16 @@
         eye: new THREE.Color(0xfffaf0),
         pupil: new THREE.Color(0x16304a),
       };
+
+      /**
+       * Repaint in place. The geometry builders read these Color objects while they
+       * run, so the values are overwritten rather than replaced — every reference
+       * already handed out keeps working.
+       */
+      function applyPalette(palette) {
+        for (const [key, hex] of Object.entries(palette)) C[key]?.setHex(hex);
+        C.pupil.copy(C.edge);
+      }
 
       /** Collects flat-shaded triangles with per-vertex colour. */
       class Tris {
@@ -2344,6 +3074,28 @@
         constructor(scene) {
           this.root = new THREE.Group();
           scene.add(this.root);
+          this.trail = new Trail(scene);
+          this.idlePhase = 0;
+          this.gaze = 0; // eased steer, for where the head and tail are pointed
+          this.wingAngle = 0; // the wing chases the arm rather than matching it exactly
+          this.wingVel = 0;
+          this.#build();
+        }
+
+        /** Rebuild the bird in the current palette, throwing the old one away. */
+        setSkin(palette) {
+          applyPalette(palette);
+          this.#build();
+        }
+
+        #build() {
+          for (const child of [...this.root.children]) {
+            child.traverse((o) => {
+              o.geometry?.dispose();
+              o.material?.dispose();
+            });
+            this.root.remove(child);
+          }
 
           const toon = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: TOON });
 
@@ -2353,6 +3105,7 @@
           const head = new THREE.Group();
           head.position.set(0, 0.34, -2.55);
           this.root.add(head);
+          this.head = head;
 
           const skull = new THREE.IcosahedronGeometry(0.78, 1);
           head.add(
@@ -2379,6 +3132,7 @@
           const tail = inked(buildTail(), toon, 0.07);
           tail.position.set(0, 0.05, 2.2);
           this.root.add(tail);
+          this.tail = tail;
 
           /* ---- wings ---- */
           const wingGeo = buildWing();
@@ -2389,9 +3143,6 @@
           this.wingR.position.set(0.62, 0.26, -0.3);
           this.wingL.position.set(-0.62, 0.26, -0.3);
           this.root.add(this.wingR, this.wingL);
-
-          this.trail = new Trail(scene);
-          this.idlePhase = 0;
         }
 
         reset() {
@@ -2417,14 +3168,44 @@
           const fold = THREE.MathUtils.lerp(1, 0.32, tuck);
           const sweep = tuck * 0.85;
 
+          // A wing is not a plank. It runs a little past where the arm stopped and
+          // settles back, and the trailing edge lags behind the leading one while it is
+          // moving — a lightly damped spring gives both without splitting the geometry.
+          const step = Math.min(dt, 1 / 30);
+          const accel = 62 * (target - this.wingAngle) - 9.5 * this.wingVel;
+          this.wingVel += accel * step;
+          this.wingAngle += this.wingVel * step;
+          const twist = THREE.MathUtils.clamp(-this.wingVel * 0.05, -0.38, 0.38);
+
           for (const [wing, sign] of [
             [this.wingR, 1],
             [this.wingL, -1],
           ]) {
-            wing.rotation.z = sign * target;
+            wing.rotation.z = sign * this.wingAngle;
             wing.rotation.y = -sign * sweep;
+            // the same world axis for both wings: the trailing edge is +Z on each
+            wing.rotation.x = twist;
             wing.scale.setScalar(fold);
           }
+
+          /* ---- head and tail: the parts that make it look alive ---- */
+          // A bird looks where it is going before it gets there, and steers with its
+          // tail. Both are eased rather than driven straight off the input, so a
+          // twitch in the tracking does not snap the head around.
+          const steer = tracked ? gesture.steer : 0;
+          const glide = tracked ? gesture.glide : 0.6;
+          const k = 1 - Math.exp(-dt * 7);
+
+          this.gaze += (steer - this.gaze) * k;
+          this.head.rotation.y = -this.gaze * 0.42;
+          this.head.rotation.z = this.gaze * 0.16;
+          this.head.rotation.x = -flight.pitch * 0.25;
+
+          // the tail fans out in a glide and cuts in edgewise in a stoop
+          const fan = 1 + glide * 0.4 - tuck * 0.55;
+          this.tail.scale.set(fan, 1, 1);
+          this.tail.rotation.y = this.gaze * 0.3;
+          this.tail.rotation.x = -flight.pitch * 0.2 + tuck * 0.25;
 
           this.trail.update(dt, flight);
         }
@@ -2526,15 +3307,75 @@
         lift: 46, // extra height swing along the course
       };
 
+      /* ==========================================================================
+       * Ways to play
+       * ========================================================================== */
+      /**
+       * A mode is a few numbers, not a separate game: how long you have, whether the
+       * island can kill you, and what shape the gate course takes. Everything else —
+       * the bird, the island, the scoring — is the same underneath, so a mode change
+       * is felt as a change of pressure rather than a change of subject.
+       */
+      const MODES = [
+        {
+          id: "run",
+          name: "Run",
+          blurb: "One life, no clock. See how far the island lets you get.",
+        },
+        {
+          id: "sprint",
+          name: "Time attack",
+          blurb: "Ninety seconds. Every gate you chain is worth more than the last.",
+          limit: 90,
+        },
+        {
+          id: "slalom",
+          name: "Slalom",
+          blurb: "Gates half as far apart, low over the trees. Nowhere to rest.",
+          // clearance stays above COVER.bandCeiling plus the hoop radius, or the gates
+          // start swallowing pine tops; the spacing is what makes this mode, not the height
+          course: { step: 0.12, radius: 330, swing: 105, clearance: 88, lift: 30 },
+        },
+        {
+          id: "roam",
+          name: "Roam",
+          blurb: "Nothing to lose: no crashes, no stamina, no clock.",
+          gentle: true, // the island catches you instead of ending the run
+        },
+      ];
+
+      const modeById = (id) => MODES.find((m) => m.id === id) ?? MODES[0];
+
+      /** The gate course as the current mode shapes it; ringPoint reads this. */
+      const LEVEL = { ...COURSE };
+
+      function useMode(id) {
+        const mode = modeById(id);
+        Object.assign(LEVEL, COURSE, mode.course);
+        return mode;
+      }
+
+
+
+      /** How far out from a gate centre the ground still has to clear its rim. */
+      const RIM_REACH = 18;
+
       /** Centre of gate `index`, written into `out`. */
       function ringPoint(index, out) {
-        const a = index * COURSE.step;
-        const r = COURSE.radius + Math.sin(a * 0.73 + 0.6) * COURSE.swing;
+        const a = index * LEVEL.step;
+        const r = LEVEL.radius + Math.sin(a * 0.73 + 0.6) * LEVEL.swing;
         const x = Math.cos(a) * r;
         const z = Math.sin(a) * r;
-        // above whatever is underneath: the sea near the coast, the flank inland
-        const ground = Math.max(groundAt(x, z), 0);
-        const y = ground + COURSE.clearance + COURSE.lift * (0.5 + 0.5 * Math.sin(a * 1.31 + 2.1));
+        // Above whatever is underneath: the sea near the coast, the flank inland.
+        // The highest ground the hoop spans, not the ground at its centre — on a slope
+        // the far side rises, and measuring only the middle once left a gate hanging
+        // 30 cm off a pine top, which is an invisible wall rather than a gate.
+        let ground = groundAt(x, z);
+        for (let k = 0; k < 4; k++) {
+          const t = (k / 4) * Math.PI * 2;
+          ground = Math.max(ground, groundAt(x + Math.cos(t) * RIM_REACH, z + Math.sin(t) * RIM_REACH));
+        }
+        const y = Math.max(ground, 0) + LEVEL.clearance + LEVEL.lift * (0.5 + 0.5 * Math.sin(a * 1.31 + 2.1));
         return out.set(x, y, z);
       }
 
@@ -2609,6 +3450,12 @@
 
           this.gates = Array.from({ length: POOL }, () => makeGate());
           this.bursts = Array.from({ length: BURSTS }, () => ({ ...makeGate(), life: 0 }));
+          // A burst is a flash, not an object: kept out of the depth buffer so the ink
+          // pass does not draw a hoop-sized black scribble across the sky around it.
+          for (const b of this.bursts) {
+            b.ringMat.depthWrite = false;
+            b.inkMat.depthWrite = false;
+          }
           [...this.gates, ...this.bursts].forEach((g) => this.group.add(g.holder));
 
           this.reset();
@@ -2747,6 +3594,7 @@
           this.warning = $("cam-warning");
           this.guide = $("guide");
           this.roamBadge = $("roam-badge");
+          this.clock = $("clock");
           this.recovery = $("recovery");
           // the animation clears up after itself, whatever the run does meanwhile
           this.recovery.addEventListener("animationend", () => {
@@ -2767,11 +3615,27 @@
           this.el.hidden = !visible;
         }
 
-        reset(roam = false) {
+        reset(played) {
           this.shownScore = 0;
-          this.roamBadge.hidden = !roam;
+          // the default run needs no label; anything else says what it is
+          this.roamBadge.hidden = played.id === "run";
+          this.roamBadge.textContent = played.name;
+          this.clock.hidden = !played.limit;
           this.recovery.classList.remove("show");
           this.recovery.hidden = true;
+        }
+
+        /**
+         * What a gate was worth, thrown up where it was flown through. The counter at
+         * the top rolls rather than jumps, which reads well but hides how much any one
+         * ring gave you — this is the part that makes a chain feel like it is paying.
+         */
+        flashScore(points, combo) {
+          const tag = document.createElement("div");
+          tag.className = "ring-score";
+          tag.textContent = combo > 1 ? `+${points} ×${combo}` : `+${points}`;
+          tag.addEventListener("animationend", () => tag.remove());
+          this.el.appendChild(tag);
         }
 
         /** Roam mode caught the bird — say so, briefly. */
@@ -2797,7 +3661,7 @@
           this.stamina.style.width = `${staminaPct}%`;
           this.stamina.classList.toggle("low", staminaPct < 30);
 
-          const speedNorm = (flight.speed - FLIGHT.minSpeed) / (FLIGHT.maxSpeed - FLIGHT.minSpeed);
+          const speedNorm = (flight.speed - ACTIVE.minSpeed) / (ACTIVE.maxSpeed - ACTIVE.minSpeed);
           this.speed.style.width = `${Math.round(speedNorm * 100)}%`;
 
           // height above whatever is under you, not above sea level — that is what you hit
@@ -2813,6 +3677,13 @@
             "active",
             gesture.tracked && gesture.glide > 0.4 && gesture.tuck < 0.4,
           );
+
+          if (session.mode.limit) {
+            const left = Math.max(0, session.clock);
+            this.clock.textContent = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}`;
+            // the last ten seconds are the whole point of the mode, so they are loud
+            this.clock.classList.toggle("urgent", left <= 10);
+          }
 
           const hint = gesture.hint || "";
           this.warning.hidden = !hint;
@@ -3008,6 +3879,8 @@
         flapRefSpeed: 5.5, // rad/s downstroke speed
         flapSweepFloor: 0.6,
         flapSpeedFloor: 0.65,
+        flapRelease: 0.62, // fraction of peak stroke speed at which the beat is called
+        flapEarlyGain: 1.25, // what the unfinished stroke is still going to travel
         flapMinExtension: 0.5, // arms must be at least this straight to count
         flapCooldown: 0.16, // s
         flapDecay: 0.85, // s, how fast the "recently flapping" signal fades
@@ -3024,18 +3897,23 @@
         spreadOutLo: 0.58,
         spreadOutHi: 0.82,
         glideLevelBand: 0.55, // rad from horizontal still considered "held out"
+        trimBand: 0.62, // rad of held arm angle that asks for all the pitch there is
 
-        steerBankGain: 1.45, // shoulder-drop contribution
-        steerLeanGain: 1.1, // torso-lean contribution
-        steerDeadzone: 0.07,
+        // Measured against a synthetic lean: at the old gains a hard 35-degree shoulder
+        // drop only asked for 0.74 of a turn, and an ordinary 15-degree one for 0.2.
+        // You leaned your whole body and the bird tipped a quarter of the way over.
+        // These reach full bank at about 30 degrees, and stay gentle under 10.
+        steerBankGain: 2.2, // shoulder-drop contribution
+        steerLeanGain: 1.7, // torso-lean contribution
+        steerDeadzone: 0.06,
 
         visibilityFloor: 0.45,
 
         // The camera delivers ~30 poses/s while the game renders at 60+. Controls are
         // therefore eased toward the latest reading every frame, which removes the
         // staircase without adding meaningful lag.
-        easeTau: 0.05, // s, for tuck/glide/wing
-        steerTau: 0.075, // s, steering wants to feel a touch heavier
+        easeTau: 0.04, // s, for tuck/glide/wing
+        steerTau: 0.045, // s — any heavier and the lean-to-turn feels posted, not flown
         lostTau: 0.3, // s, drifting back to neutral when the body is lost
         lostGrace: 0.35, // s a dropout is ignored before neutral is targeted
       };
@@ -3174,10 +4052,10 @@
           this.cal = { bankOffset: 0, leanOffset: 0, armLen: null, ready: false };
           this.samples = null;
 
-          this.fWing = new OneEuro(1.6, 0.8);
+          this.fWing = new OneEuro(1.6, 1.3); // high beta: little lag on a fast stroke
           this.fSpread = new OneEuro(1.1, 0.3);
           this.fExtension = new OneEuro(1.1, 0.3);
-          this.fSteer = new OneEuro(0.9, 0.25);
+          this.fSteer = new OneEuro(2.4, 0.9); // low lag, and it firms up when you hold still
 
           this.flapPeak = 0;
           this.stroking = false;
@@ -3310,6 +4188,9 @@
             flapActivity: clamp(this.flapActivity, 0, 1),
             flap,
             steer: clamp(this.smooth.steer, -1, 1),
+            // where the arms are being held, once they have stopped beating: a glider
+            // trims with the angle of the wing, and so does this
+            trim: clamp(this.smooth.wingAngle / TUNE.trimBand, -1, 1) * (1 - clamp(this.flapActivity, 0, 1)),
             hint: lost ? "no body detected" : (this.hint ?? ""),
           };
           return this.out;
@@ -3353,13 +4234,19 @@
             this.strokeLow = Math.min(this.strokeLow, wingAngle);
             this.strokeVel = Math.max(this.strokeVel, -wingVel);
 
-            // the beat lands when the arms stop going down, and is scored on the whole
-            // stroke — firing partway through would make every flap feel identical
-            if (wingVel > -TUNE.flapMinSpeed * 0.35) {
+            // The beat lands as soon as the arms stop pushing — once the downstroke has
+            // fallen well off its peak speed — rather than when they finally halt.
+            // Waiting for the stop cost 0.18 s after the motion was already over, on top
+            // of the stroke itself: you flapped, and the bird answered half a second later.
+            const easing = -wingVel < this.strokeVel * TUNE.flapRelease;
+            if (easing || wingVel > -TUNE.flapMinSpeed * 0.35) {
               const sweep = this.strokeTop - this.strokeLow;
               if (sweep >= TUNE.flapMinSweep && this.flapCooldown === 0) {
+                // called early, so the arms have not finished travelling: the sweep so
+                // far understates the beat that is actually being thrown
+                const reach = sweep * (easing ? TUNE.flapEarlyGain : 1);
                 const power =
-                  clamp(sweep / TUNE.flapRefSweep, TUNE.flapSweepFloor, 1.3) *
+                  clamp(reach / TUNE.flapRefSweep, TUNE.flapSweepFloor, 1.3) *
                   clamp(this.strokeVel / TUNE.flapRefSpeed, TUNE.flapSpeedFloor, 1.25);
                 flap = { power: clamp(power, 0.15, 1.35), sweep };
                 this.flapActivity = Math.max(this.flapActivity, clamp(power, 0, 1));
@@ -3410,6 +4297,7 @@
         constructor() {
           this.keys = new Set();
           this.steer = 0;
+          this.trim = 0;
           this.flapActivity = 0;
           this.pendingFlap = false;
 
@@ -3427,7 +4315,7 @@
 
         update(_result, dt) {
           const held = (...codes) => codes.some((c) => this.keys.has(c));
-          const tuck = held("ShiftLeft", "ShiftRight", "KeyS", "ArrowDown") ? 1 : 0;
+          const tuck = held("ShiftLeft", "ShiftRight") ? 1 : 0;
 
           const dir = (held("KeyD", "ArrowRight") ? 1 : 0) - (held("KeyA", "ArrowLeft") ? 1 : 0);
           this.steer += (dir - this.steer) * (1 - Math.exp(-dt * 6));
@@ -3437,6 +4325,10 @@
           this.flapActivity = flap ? 1 : this.flapActivity * Math.exp(-dt / 0.55);
 
           const wingAngle = flap ? 1.1 : -0.05 + this.flapActivity * 0.9;
+
+          // W/S stand in for holding the arms high or low
+          const wanted = (held("KeyW", "ArrowUp") ? 1 : 0) - (held("KeyS", "ArrowDown") ? 1 : 0);
+          this.trim += (wanted - this.trim) * (1 - Math.exp(-dt * 6));
 
           return {
             tracked: true,
@@ -3449,6 +4341,7 @@
             flapActivity: this.flapActivity,
             flap,
             steer: this.steer,
+            trim: this.trim * (1 - this.flapActivity),
             hint: "",
           };
         }
@@ -3519,7 +4412,8 @@
         tilt: [[6, 34], [19, 30], [45, 18], [58, 12]],
       };
 
-      const ACCENT = { flap: "#ffb347", glide: "#5fd7c8", dive: "#ff6b6b", tilt: "#f7efe4" };
+      // drawn on the light title card, so these are the deeper ends of the HUD colours
+      const ACCENT = { flap: "#e08a1e", glide: "#12a5b8", dive: "#e04f4f", tilt: "#5b6270" };
 
       /** Small stick-figure diagram of each pose, drawn inline so the CSS stays simple. */
       function poseArt(kind) {
@@ -3554,6 +4448,166 @@
       }
 
       /* ==========================================================================
+       * Sound
+       * ========================================================================== */
+      /**
+       * Everything here is synthesised — no files to load, nothing to wait for, and
+       * the whole thing is a few hundred bytes of code instead of a few hundred
+       * kilobytes of audio. Wind is filtered noise whose brightness and loudness ride
+       * the airspeed; a gate is a short bell that climbs with the chain; a crash is
+       * the same noise, opened wide and cut off.
+       *
+       * Browsers will not let audio start before a gesture, so the context is created
+       * on the first press and stays for the session.
+       */
+      class Sound {
+        constructor() {
+          this.ctx = null;
+          this.on = true;
+        }
+
+        /** Called from a click, which is the only moment a context may start. */
+        start() {
+          // a context built outside a real gesture starts suspended, so always retry
+          if (this.ctx) {
+            if (this.ctx.state === "suspended") this.ctx.resume();
+            return;
+          }
+          if (!this.on) return;
+          const Ctx = window.AudioContext ?? window.webkitAudioContext;
+          if (!Ctx) return; // no audio here; the game is otherwise unaffected
+          this.ctx = new Ctx();
+
+          this.master = this.ctx.createGain();
+          this.master.gain.value = 0.9;
+          this.master.connect(this.ctx.destination);
+
+          /* ---- wind: one noise buffer looping through a moving filter ---- */
+          const seconds = 2;
+          const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * seconds, this.ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          let last = 0;
+          for (let i = 0; i < data.length; i++) {
+            // brown-ish noise: smoother and less hissy than white
+            last = (last + Math.random() * 2 - 1) * 0.5;
+            data[i] = last;
+          }
+          this.noise = this.ctx.createBufferSource();
+          this.noise.buffer = buffer;
+          this.noise.loop = true;
+
+          this.windFilter = this.ctx.createBiquadFilter();
+          this.windFilter.type = "bandpass";
+          this.windFilter.frequency.value = 500;
+          this.windFilter.Q.value = 0.7;
+
+          this.windGain = this.ctx.createGain();
+          this.windGain.gain.value = 0;
+
+          this.noise.connect(this.windFilter).connect(this.windGain).connect(this.master);
+          this.noise.start();
+        }
+
+        get ready() {
+          return !!this.ctx && this.on;
+        }
+
+        mute(off) {
+          this.on = !off;
+          if (this.master) this.master.gain.value = off ? 0 : 0.9;
+        }
+
+        /** Airspeed drives how loud and how bright the air sounds. */
+        wind(speedNorm) {
+          if (!this.ready) return;
+          const t = this.ctx.currentTime;
+          const target = Math.min(speedNorm, 1);
+          this.windGain.gain.setTargetAtTime(0.02 + target * 0.3, t, 0.15);
+          this.windFilter.frequency.setTargetAtTime(320 + target * 1500, t, 0.2);
+        }
+
+        /** A short struck tone. Everything below is built from this. */
+        #ping({ freq, length = 0.25, type = "sine", gain = 0.2, sweep = 0 }) {
+          if (!this.ready) return;
+          const t = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const amp = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, t);
+          if (sweep) osc.frequency.exponentialRampToValueAtTime(Math.max(freq + sweep, 30), t + length);
+          amp.gain.setValueAtTime(0, t);
+          amp.gain.linearRampToValueAtTime(gain, t + 0.008);
+          amp.gain.exponentialRampToValueAtTime(0.0001, t + length);
+          osc.connect(amp).connect(this.master);
+          osc.start(t);
+          osc.stop(t + length + 0.02);
+        }
+
+        /** Through a gate: a bell that climbs a scale as the chain grows. */
+        gate(combo) {
+          const steps = [0, 2, 4, 7, 9, 12, 14, 16];
+          const semitone = steps[Math.min(combo - 1, steps.length - 1)] ?? 0;
+          const freq = 523.25 * Math.pow(2, semitone / 12);
+          this.#ping({ freq, length: 0.3, gain: 0.17 });
+          this.#ping({ freq: freq * 2, length: 0.16, gain: 0.07 });
+        }
+
+        /** A gate gone by: a short, flat, unmusical note. */
+        miss() {
+          this.#ping({ freq: 180, length: 0.18, type: "triangle", gain: 0.1, sweep: -60 });
+        }
+
+        /** Meeting the island. */
+        crash() {
+          if (!this.ready) return;
+          const t = this.ctx.currentTime;
+          const amp = this.ctx.createGain();
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = "lowpass";
+          filter.frequency.setValueAtTime(1800, t);
+          filter.frequency.exponentialRampToValueAtTime(120, t + 0.5);
+          amp.gain.setValueAtTime(0.35, t);
+          amp.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+          const burst = this.ctx.createBufferSource();
+          burst.buffer = this.noise.buffer;
+          burst.loop = true;
+          burst.connect(filter).connect(amp).connect(this.master);
+          burst.start(t);
+          burst.stop(t + 0.62);
+          this.#ping({ freq: 90, length: 0.4, type: "sine", gain: 0.25, sweep: -40 });
+        }
+
+        /** A wingbeat: a soft push of air, louder for a fuller stroke. */
+        flap(power) {
+          if (!this.ready) return;
+          const t = this.ctx.currentTime;
+          const amp = this.ctx.createGain();
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = "lowpass";
+          filter.frequency.setValueAtTime(900, t);
+          filter.frequency.exponentialRampToValueAtTime(220, t + 0.22);
+          amp.gain.setValueAtTime(0.0001, t);
+          amp.gain.linearRampToValueAtTime(0.05 + Math.min(power, 1.3) * 0.08, t + 0.03);
+          amp.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+          const burst = this.ctx.createBufferSource();
+          burst.buffer = this.noise.buffer;
+          burst.loop = true;
+          burst.connect(filter).connect(amp).connect(this.master);
+          burst.start(t);
+          burst.stop(t + 0.26);
+        }
+
+        /** A bird earned. */
+        unlock() {
+          [0, 4, 7, 12].forEach((step, i) => {
+            setTimeout(() => this.#ping({ freq: 523.25 * Math.pow(2, step / 12), length: 0.4, gain: 0.14 }), i * 110);
+          });
+        }
+      }
+
+      const sound = new Sound();
+
+      /* ==========================================================================
        * Wiring and the main loop
        * ========================================================================== */
       const CALIBRATION_SECONDS = 2.5;
@@ -3566,7 +4620,6 @@
         card: $("screen-card"),
         status: $("status"),
         button: $("primary-btn"),
-        roamButton: $("roam-btn"),
         cam: $("cam"),
         video: $("cam-video"),
         overlay: $("cam-overlay"),
@@ -3586,7 +4639,7 @@
       const keyboard = new KeyboardGestures();
 
       let reader = poseReader;
-      let mode = "boot"; // boot | title | calibrating | playing | paused | dying | dead
+      let phase = "boot"; // boot | title | calibrating | playing | paused | dying | dead
       // The reader already rides out brief dropouts, so this only has to cover the
       // gap between "really gone" and "flying blind into a wall".
       const LOST_PAUSE = 0.25; // s after the reader gives up before the run pauses
@@ -3608,8 +4661,144 @@
         el.card.innerHTML = titleCardHTML;
         el.status = $("status");
         el.button = $("primary-btn");
-        el.roamButton = $("roam-btn");
         paintPoseArt(el.card);
+        paintCharacterPicker();
+        paintModePicker();
+        paintMuteButton();
+      }
+
+      /* ------------------------------------------------------------------ *
+       * character choice
+       * ------------------------------------------------------------------ */
+      /* ------------------------------------------------------------------ *
+       * what the player keeps between runs
+       * ------------------------------------------------------------------ */
+      /**
+       * Rings flown through never reset, so there is always something moving forward
+       * even after a bad run — that is what makes the next bird feel close rather
+       * than far. Stored as one small object; if storage is unavailable the game
+       * plays exactly the same, you just start fresh every time.
+       */
+      const SAVE_KEY = "thermal.profile";
+      const BLANK_PROFILE = { best: 0, bests: {}, rings: 0, character: CHARACTERS[0].id, mode: MODES[0].id, muted: false };
+
+      function loadProfile() {
+        try {
+          const raw = JSON.parse(localStorage.getItem(SAVE_KEY) ?? "{}");
+          // one record per mode: ninety seconds and an open-ended run are not the
+          // same achievement, and a single number would let one bury the other
+          const bests = {};
+          for (const m of MODES) bests[m.id] = Number(raw.bests?.[m.id]) || 0;
+          return {
+            best: Number(raw.best) || 0,
+            bests,
+            rings: Number(raw.rings) || 0,
+            character: characterById(raw.character).id,
+            mode: modeById(raw.mode).id,
+            muted: !!raw.muted,
+          };
+        } catch {
+          return { ...BLANK_PROFILE };
+        }
+      }
+
+      const profile = loadProfile();
+
+      function saveProfile() {
+        try {
+          localStorage.setItem(SAVE_KEY, JSON.stringify(profile));
+        } catch {
+          // playing without a memory is still playing
+        }
+      }
+
+      const unlocked = (c) => profile.rings >= c.unlockAt;
+
+      /** Everything newly earned by the run that just ended. */
+      function collectUnlocks(before) {
+        return CHARACTERS.filter((c) => c.unlockAt > before && profile.rings >= c.unlockAt);
+      }
+
+      let chosenCharacter = unlocked(characterById(profile.character))
+        ? characterById(profile.character).id
+        : CHARACTERS[0].id;
+
+      function chooseCharacter(id) {
+        const c = characterById(id);
+        if (!unlocked(c)) return;
+        chosenCharacter = c.id;
+        profile.character = c.id;
+        saveProfile();
+        // show it straight away: picking a bird you then fly is the whole point
+        bird.setSkin(c.palette);
+        paintCharacterPicker();
+      }
+
+      let chosenMode = modeById(profile.mode).id;
+
+      function chooseMode(id) {
+        chosenMode = modeById(id).id;
+        profile.mode = chosenMode;
+        saveProfile();
+        paintModePicker();
+      }
+
+      function paintMuteButton() {
+        const btn = $("mute-btn");
+        if (!btn) return;
+        $("mute-icon").textContent = profile.muted ? "off" : "on";
+        btn.setAttribute("aria-pressed", String(!profile.muted));
+        btn.onclick = () => {
+          profile.muted = !profile.muted;
+          saveProfile();
+          sound.start(); // the toggle is itself a gesture, so audio may wake here
+          sound.mute(profile.muted);
+          paintMuteButton();
+        };
+      }
+
+      function paintModePicker() {
+        const host = $("modes");
+        if (!host) return;
+        host.innerHTML = MODES.map(
+          (m) => `
+            <button class="segment" type="button" data-id="${m.id}"
+                    aria-pressed="${m.id === chosenMode}">${m.name}</button>`,
+        ).join("");
+        for (const seg of host.querySelectorAll(".segment")) {
+          seg.onclick = () => chooseMode(seg.dataset.id);
+        }
+        const blurb = $("mode-blurb");
+        if (blurb) blurb.textContent = modeById(chosenMode).blurb;
+      }
+
+      function paintCharacterPicker() {
+        const host = $("birds");
+        if (!host) return;
+        host.innerHTML = CHARACTERS.map((c) => {
+          const open = unlocked(c);
+          // A locked card still shows what it is and how close you are — a bird you
+          // cannot see is not something you want. An unlocked one keeps its blurb for
+          // when it is the one selected, so four cards do not shout at once.
+          const foot = !open
+            ? `<span class="locked-at">${profile.rings} / ${c.unlockAt} rings</span>
+               <span class="lock-bar"><i style="width:${Math.min(100, (profile.rings / c.unlockAt) * 100)}%"></i></span>`
+            : "";
+          return `
+            <button class="bird-card" type="button" data-id="${c.id}"
+                    aria-pressed="${c.id === chosenCharacter}"
+                    ${open ? "" : 'data-locked="true" disabled'}>
+              <span class="bird-swatch">${c.swatch.map((s) => `<i style="background:${s}"></i>`).join("")}</span>
+              <b>${c.name}</b>
+              <em>${c.trait}</em>
+              ${foot}
+            </button>`;
+        }).join("");
+        for (const card of host.querySelectorAll(".bird-card")) {
+          card.onclick = () => chooseCharacter(card.dataset.id);
+        }
+        const blurb = $("bird-blurb");
+        if (blurb) blurb.textContent = characterById(chosenCharacter).blurb;
       }
 
       const START_POS = new THREE.Vector3();
@@ -3627,7 +4816,10 @@
         cause: "",
         altitude: 0,
         ceiling: ISLAND.ceiling,
-        roam: false, // free flight: the island, no fail state
+        mode: MODES[0],
+        gentle: false, // the island catches you instead of ending the run
+        clock: 0, // seconds left, when the mode has a limit
+        character: CHARACTERS[0].name,
       };
 
       /* ------------------------------------------------------------------ *
@@ -3644,12 +4836,12 @@
         }
       }
 
-      /** Which mode the calibration that is running now will start. */
-      let pendingRoam = false;
+      /** Which mode the calibration now running will start. */
+      let pendingMode = null;
 
-      function showCalibration(roam = false) {
-        mode = "calibrating";
-        pendingRoam = roam;
+      function showCalibration(modeId = chosenMode) {
+        phase = "calibrating";
+        pendingMode = modeId;
         calibration = 0;
         poseReader.beginCalibration();
         el.cam.hidden = false;
@@ -3673,24 +4865,32 @@
           calibration = 0;
           return;
         }
-        startRun(pendingRoam);
+        startRun(pendingMode ?? chosenMode);
       }
 
-      function startRun(roam = false) {
-        mode = "playing";
+      function startRun(modeId = chosenMode) {
+        sound.start(); // a run always begins from a press, which is when audio may wake
+        sound.mute(profile.muted);
+        const played = useMode(modeId);
+        phase = "playing";
         session.score = 0;
         session.ringScore = 0;
         session.distance = 0;
         session.combo = 0;
         session.cause = "";
-        session.roam = roam;
+        session.mode = played;
+        session.gentle = !!played.gentle;
+        session.clock = played.limit ?? 0;
+        const character = useCharacter(chosenCharacter);
+        session.character = character.name;
+        bird.setSkin(character.palette);
         flight.reset();
-        flight.tireless = roam;
+        flight.tireless = !!played.gentle;
         // start on the course, aimed the way the first gates run
         ringPoint(-1, START_POS);
         flight.pos.copy(START_POS);
         ringPoint(0, START_AIM);
-        flight.vel.copy(START_AIM).sub(START_POS).normalize().multiplyScalar(FLIGHT.cruiseSpeed);
+        flight.vel.copy(START_AIM).sub(START_POS).normalize().multiplyScalar(ACTIVE.cruiseSpeed);
         island.reset();
         rings.reset();
         bird.reset();
@@ -3698,7 +4898,7 @@
         prevPos.copy(flight.pos);
         accumulator = 0;
         lostTimer = 0;
-        hud.reset(roam);
+        hud.reset(played);
         hud.show(true);
         setScreen(false);
       }
@@ -3711,11 +4911,11 @@
       function recoverFlight() {
         const clear = Math.max(groundAt(flight.pos.x, flight.pos.z), 0) + RECOVER_HEIGHT;
         flight.pos.y = Math.max(flight.pos.y, clear);
-        const speed = Math.max(flight.vel.length(), FLIGHT.cruiseSpeed);
+        const speed = Math.max(flight.vel.length(), ACTIVE.cruiseSpeed);
         flight.vel.y = 0;
         // a vertical stoop leaves nothing horizontal to point at, so pick a heading
         if (flight.vel.lengthSq() < 1e-4) flight.vel.set(0, 0, -1);
-        flight.vel.setLength(Math.min(speed, FLIGHT.cruiseSpeed * 1.6));
+        flight.vel.setLength(Math.min(speed, ACTIVE.cruiseSpeed * 1.6));
         flight.bank *= 0.3;
         flight.bankVel = 0;
         prevPos.copy(flight.pos); // or the gate test reads the jump as a crossing
@@ -3729,7 +4929,7 @@
        * them straight back into a dive.
        */
       function pauseRun() {
-        mode = "paused";
+        phase = "paused";
         resumeTimer = RESUME_DELAY;
         el.card.innerHTML = `
           <h1 class="title" style="font-size:38px">Paused</h1>
@@ -3739,40 +4939,94 @@
       }
 
       function resumeRun() {
-        mode = "playing";
+        phase = "playing";
         accumulator = 0;
         lostTimer = 0;
         prevPos.copy(flight.pos);
         setScreen(false);
       }
 
+      /** The reward, stated plainly and in the bird's own colours. */
+      function unlockBanner(birds) {
+        return birds
+          .map(
+            (c) => `
+            <div class="unlock">
+              <span class="bird-swatch">${c.swatch.map((s) => `<i style="background:${s}"></i>`).join("")}</span>
+              <div><b>${c.name} unlocked</b><span>${c.trait} — pick it on the title screen</span></div>
+            </div>`,
+          )
+          .join("");
+      }
+
+      /** ...and when nothing was earned, how far off the next one is. */
+      function nextUnlockLine() {
+        const next = CHARACTERS.filter((c) => !unlocked(c)).sort((a, b) => a.unlockAt - b.unlockAt)[0];
+        if (!next) return "";
+        const left = next.unlockAt - profile.rings;
+        return `<p class="next-unlock">${left} more ring${left === 1 ? "" : "s"} to unlock <b>${next.name}</b></p>`;
+      }
+
+      /**
+       * Back to the title, with the bird and mode pickers on it. The scene keeps
+       * flying behind the glass, so this reads as stepping back rather than quitting.
+       */
+      function backToTitle() {
+        phase = "title";
+        hud.show(false);
+        restoreTitleCard();
+        el.status.className = "status";
+        el.status.textContent = cameraReady
+          ? "Camera is live. Ready when you are."
+          : "Keyboard mode — space to flap, shift to dive, A/D to steer.";
+        el.button.textContent = cameraReady ? "Start" : "Play with keys";
+        el.button.disabled = false;
+        el.button.onclick = cameraReady ? () => showCalibration() : () => startRun();
+        setScreen(true);
+      }
+
       function showGameOver() {
-        mode = "dead";
+        phase = "dead";
         session.best = Math.max(session.best, session.score);
+
+        // the run is over, but the rings are kept: the next bird is always closer
+        const ringsBefore = profile.rings;
+        profile.rings += rings.hits;
+        profile.best = Math.max(profile.best, session.score);
+        const modeBest = profile.bests[session.mode.id] ?? 0;
+        const beatIt = session.score > modeBest;
+        profile.bests[session.mode.id] = Math.max(modeBest, session.score);
+        saveProfile();
+        const earned = collectUnlocks(ringsBefore);
+        if (earned.length) sound.unlock();
+        else if (beatIt && session.score > 0) sound.gate(6);
+
         const cause = {
           water: "Ditched in the sea",
           ground: "Hit the deck",
           tree: "Flew into a tree",
           rock: "Hit a rock",
+          time: "Time",
         }[session.cause] ?? "Down";
 
         el.card.innerHTML = `
-          <p class="subtitle" style="margin-bottom:6px">${cause}</p>
-          <div class="score-final">${session.score.toLocaleString()}</div>
+          <p class="subtitle" style="margin-bottom:6px">${beatIt ? "New best" : cause}</p>
+          <div class="score-final${beatIt ? " record" : ""}">${session.score.toLocaleString()}</div>
           <div class="score-rows">
             <div><b>${Math.round(session.distance)}m</b>distance</div>
             <div><b>${rings.hits}</b>rings</div>
             <div><b>${rings.bestCombo}×</b>best chain</div>
-            <div><b>${session.best.toLocaleString()}</b>best run</div>
+            <div><b>${profile.bests[session.mode.id].toLocaleString()}</b>best ${session.mode.name.toLowerCase()}</div>
           </div>
+          ${earned.length ? unlockBanner(earned) : nextUnlockLine()}
           <div class="btn-row">
             <button class="btn" id="again-btn">Fly again</button>
-            <button class="btn btn-ghost" id="roam-again-btn">Roam</button>
+            <button class="btn btn-ghost" id="menu-btn">Change bird or mode</button>
           </div>
           <p class="footnote">Chain rings without missing to multiply the score. Glide to get your wind back.</p>`;
-        // an event object would arrive as the roam flag, so wrap rather than pass
-        $("again-btn").addEventListener("click", () => startRun(false));
-        $("roam-again-btn").addEventListener("click", () => startRun(true));
+        // an event object would arrive as the mode id, so wrap rather than pass
+        $("again-btn").addEventListener("click", () => startRun(session.mode.id));
+        $("menu-btn").addEventListener("click", backToTitle);
         setScreen(true);
       }
 
@@ -3818,6 +5072,10 @@
 
       async function boot() {
         paintPoseArt();
+        paintCharacterPicker();
+        paintModePicker();
+        paintMuteButton();
+        bird.setSkin(characterById(chosenCharacter).palette);
         if (new URLSearchParams(location.search).has("keys")) {
           useKeyboard();
           return;
@@ -3852,14 +5110,12 @@
       }
 
       function askForCamera() {
-        mode = "title";
+        phase = "title";
         el.status.className = "status";
         el.status.innerHTML = "This game is played with your body, so it needs your camera.";
         el.button.textContent = "Allow camera";
         el.button.disabled = false;
         el.button.onclick = grantCamera;
-        // roam still needs a controller, so it waits for the camera too
-        el.roamButton.disabled = true;
       }
 
       /** Acquire the camera and leave it running, with the preview visible. */
@@ -3873,13 +5129,11 @@
           restoreTitleCard();
           el.cam.hidden = false;
           lastStatus = "";
-          mode = "title";
+          phase = "title";
           setScreen(true);
           el.button.textContent = "Start";
           el.button.disabled = false;
-          el.button.onclick = () => showCalibration(false);
-          el.roamButton.disabled = false;
-          el.roamButton.onclick = () => showCalibration(true);
+          el.button.onclick = () => showCalibration();
           buildCameraPicker();
         } catch (err) {
           console.error("camera failed:", err);
@@ -3900,9 +5154,7 @@
         el.button.textContent = "Play with keys";
         el.button.disabled = false;
         el.button.onclick = () => startRun();
-        el.roamButton.disabled = false;
-        el.roamButton.onclick = () => startRun(true);
-        mode = "title";
+        phase = "title";
       }
 
       /** Only shown when there is an actual choice to make. */
@@ -3927,7 +5179,7 @@
       }
 
       function showCameraError(err) {
-        mode = "title";
+        phase = "title";
         cameraReady = false;
         el.cam.hidden = true;
         el.card.innerHTML = `
@@ -3950,7 +5202,7 @@
 
       /** A dead end the player cannot retry out of — wrong origin, or no model. */
       function showBlocker(title, html) {
-        mode = "title";
+        phase = "title";
         el.card.innerHTML = `
           <h1 class="title" style="font-size:40px">${title}</h1>
           <p class="status error" style="max-width:540px;margin:14px auto 26px">${html}</p>
@@ -3964,8 +5216,8 @@
 
       addEventListener("keydown", (e) => {
         // restart in whichever mode you were already in
-        if (e.code === "KeyR" && (mode === "playing" || mode === "paused" || mode === "dead")) {
-          startRun(session.roam);
+        if (e.code === "KeyR" && (phase === "playing" || phase === "paused" || phase === "dead")) {
+          startRun(session.mode.id);
         }
       });
 
@@ -3979,6 +5231,7 @@
 
       function frame(now) {
         requestAnimationFrame(frame);
+        const workStart = performance.now();
         const dt = Math.min((now - last) / 1000, 0.05);
         last = now;
         const time = now / 1000;
@@ -3989,7 +5242,7 @@
 
         let gesture = { tracked: false, flapActivity: 0, steer: 0, tuck: 0, glide: 0, hint: "" };
 
-        if (mode === "calibrating") {
+        if (phase === "calibrating") {
           const quality = poseReader.sampleCalibration(lastResult);
           calibration = Math.max(0, calibration + (quality > 0.35 ? dt : -dt * 1.5));
           const ring = $("cal-ring");
@@ -4004,9 +5257,9 @@
                 : "Arms straight out to the sides, level with your shoulders.";
           }
           if (calibration >= CALIBRATION_SECONDS) finishCalibration();
-        } else if (mode === "playing" || mode === "dying" || mode === "paused") {
+        } else if (phase === "playing" || phase === "dying" || phase === "paused") {
           gesture = reader.update(lastResult, dt);
-        } else if (mode === "title" && cameraReady && el.status.isConnected) {
+        } else if (phase === "title" && cameraReady && el.status.isConnected) {
           // prove the camera works before anyone commits to a run
           const text = lastResult
             ? "Camera is live and I can see you. Ready when you are."
@@ -4019,12 +5272,12 @@
         }
 
         // losing the player mid-run pauses instead of letting the bird fly on blind
-        if (mode === "playing" && reader === poseReader) {
+        if (phase === "playing" && reader === poseReader) {
           lostTimer = gesture.tracked ? 0 : lostTimer + dt;
           if (lostTimer > LOST_PAUSE) pauseRun();
         }
 
-        if (mode === "paused") {
+        if (phase === "paused") {
           const hint = $("pause-hint");
           if (gesture.tracked) {
             resumeTimer -= dt;
@@ -4036,7 +5289,7 @@
           }
         }
 
-        if (mode === "playing") {
+        if (phase === "playing") {
           prevPos.copy(flight.pos);
 
           // Physics runs on a fixed step so the flight model feels identical at 30, 60
@@ -4062,23 +5315,42 @@
 
           const event = rings.update(dt, prevPos, flight.pos, time);
           if (event?.hit) {
-            session.ringScore += RING_POINTS * Math.min(event.combo, MAX_MULTIPLIER);
+            const won = RING_POINTS * Math.min(event.combo, MAX_MULTIPLIER);
+            session.ringScore += won;
+            hud.flashScore(won, event.combo);
+            sound.gate(event.combo);
+          } else if (event) {
+            sound.miss();
           }
           session.combo = rings.combo;
           session.score = Math.floor(session.distance) + session.ringScore;
 
-          if (hit && session.roam) {
+          // a timed mode ends on the clock rather than on the ground
+          if (session.mode.limit) {
+            session.clock -= dt;
+            if (session.clock <= 0) {
+              session.clock = 0;
+              session.cause = "time";
+              flight.alive = false;
+              hud.show(false);
+              showGameOver();
+              return;
+            }
+          }
+
+          if (hit && session.gentle) {
             // roam has no fail state: lift the bird clear and hand it back flying
             // level, so a scrape costs you height and nothing else
             recoverFlight();
           } else if (hit) {
             session.cause = hit;
             flight.alive = false;
-            mode = "dying";
+            sound.crash();
+            phase = "dying";
             crashTimer = 0;
             gfx.renderer.toneMappingExposure = 2.1;
           }
-        } else if (mode === "dying") {
+        } else if (phase === "dying") {
           crashTimer += dt;
           flight.vel.y -= 26 * dt;
           flight.vel.multiplyScalar(1 - dt * 1.2);
@@ -4091,18 +5363,23 @@
           }
         }
 
-        if (mode === "playing" || mode === "paused" || mode === "dying" || mode === "dead") {
-          const speedNorm = (flight.speed - FLIGHT.minSpeed) / (FLIGHT.maxSpeed - FLIGHT.minSpeed);
+        if (phase === "playing" || phase === "paused" || phase === "dying" || phase === "dead") {
+          const speedNorm = (flight.speed - ACTIVE.minSpeed) / (ACTIVE.maxSpeed - ACTIVE.minSpeed);
+          // the air only rushes while you are being carried by it: once the run is over
+          // the wind lets go rather than howling on behind the score
+          sound.wind(phase === "playing" ? Math.max(0, speedNorm) : 0);
+          if (gesture.flap && phase === "playing") sound.flap(gesture.flap.power);
           bird.update(dt, flight, gesture);
           chase.update(dt, flight, Math.max(0, speedNorm));
           gfx.dust.update(flight.pos, gfx.camera, gfx.renderer);
           gfx.clouds.update(flight.pos);
-          if (mode === "playing") {
+          if (phase === "playing") {
             hud.update(dt, flight, gesture, session);
             hud.guideTo(rings.nextIndex, gfx.camera);
           }
         } else {
           // slow orbit of the island behind the menu, riding the ring course itself
+          sound.wind(0); // the menu is quiet
           menuIndex += dt * 0.3;
           ringPoint(menuIndex, MENU_POS);
           ringPoint(menuIndex + 0.6, MENU_AIM);
@@ -4116,6 +5393,7 @@
           gfx.clouds.update(flight.pos);
         }
 
+        island.update(time);
         gfx.follow.position.copy(gfx.camera.position);
 
         if (reader === poseReader && tracker.ready) {
@@ -4123,6 +5401,7 @@
         }
 
         gfx.draw();
+        gfx.pace(dt, performance.now() - workStart);
       }
 
       boot();

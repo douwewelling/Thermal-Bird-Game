@@ -14,6 +14,7 @@ blijft in je browser — er gaat geen enkel camerabeeld het netwerk op.
 |---|---|
 | Armen op en neer slaan | Klappen en klimmen. Kost conditie. |
 | Armen recht opzij houden | Zweven. Conditie loopt terug en je pakt thermiek. |
+| Armen iets hoger of lager houden | Trimmen: hoger rekt de glijvlucht, lager zet je de neus omlaag. |
 | Armen tegen je lichaam | Stoten: de neus kantelt omlaag en je snelheid loopt hard op. |
 | Schouder laten zakken, overhellen | Bochten maken. |
 
@@ -26,14 +27,45 @@ kruissnelheid. Uittrekken kost daarna zo'n 190 meter hoogte, dus begin er alleen
 aan als je die hebt. Het beeld opent mee naarmate je sneller gaat.
 
 Geen webcam? Zet `?keys` achter de URL: spatie = klappen, shift = duiken,
-A/D = sturen.
+A/D = sturen, W/S = neus omhoog of omlaag trimmen.
 
-## Roam
+## Vogels
 
-Naast een run is er **Roam**: hetzelfde eiland zonder faalstaat. Klappen kost
-geen conditie, en raak je de grond, een boom of het water, dan wordt de vogel
-opgevangen en vliegt hij vlak verder in plaats van dat de run eindigt. De ringen
-tellen nog gewoon. Bedoeld om rond te vliegen en te kijken.
+Je kiest waarmee je vliegt, en dat verandert echt iets — niet alleen de kleur.
+
+| Vogel | Waar hij goed in is | Vrij na |
+|---|---|---|
+| **Swift** | Overal even goed. De maatstaf waaraan de rest gemeten is. | meteen |
+| **Stoop** | Duikt het hardst: tot 178 m/s, en genoeg vleugel om er weer uit te komen. Zwaar in de klim. | 15 ringen |
+| **Drift** | Raakt niet moe. Klappen kost bijna niets en de glijvlucht houdt aan. Traag in de bocht. | 45 ringen |
+| **Dart** | Draait op een dubbeltje: 90 graden in 0,88 seconde. Weinig topsnelheid. | 100 ringen |
+| **Gale** | Haalt ruim twee keer zoveel uit een thermiek, maar klimt op eigen kracht het slechtst. | 200 ringen |
+
+Ringen tellen door over al je runs heen, dus ook een slechte vlucht brengt de
+volgende vogel dichterbij. Je keuze en je voortgang blijven in je browser staan.
+
+## Speelwijzen
+
+Een modus is geen apart spel, maar een paar getallen: hoeveel tijd je hebt, of
+het eiland je kan doden, en hoe de ringenbaan loopt.
+
+| Modus | Wat er anders is |
+|---|---|
+| **Run** | Eén leven, geen klok. |
+| **Time attack** | 90 seconden. De klok knippert de laatste tien tellen. |
+| **Slalom** | Ringen op 45 meter in plaats van 76, en lager over het bos. |
+| **Roam** | Geen faalstaat: klappen kost geen conditie, en raak je grond, boom of water, dan wordt de vogel opgevangen en vliegt hij vlak verder. |
+
+Elke modus houdt zijn eigen record bij. Eén gedeeld record zou een open run een
+tijdrace van anderhalve minuut laten begraven, en dan speel je die laatste nooit.
+
+## Geluid
+
+Alles is gesynthetiseerd — er wordt geen enkel geluidsbestand geladen. De wind
+volgt je snelheid, elke ring is een bel die per schakel in je ketting een toon
+hoger klimt, en er is het suizen van een vleugelslag, een doffe klap bij een
+crash en een reeks tonen als je een vogel vrijspeelt. De knop linksboven zet het
+uit en onthoudt dat.
 
 ## Zelf draaien
 
@@ -87,12 +119,35 @@ intrekken, en duwde het de neus omlaag op het moment dat je omhoog wilde: hoe
 harder je klapte, hoe minder het deed. Zolang je armen snel bewegen, en nog even
 daarna, telt intrekken daarom niet mee.
 
+**Wachten kost meer dan je denkt.** De klap werd pas geteld als je armen helemaal
+stilstonden — 0,18 seconde nadat de beweging al voorbij was, bovenop de slag zelf.
+Nu valt hij zodra de kracht eruit is, op 62% van de piek, en wordt meegerekend wat
+je armen nog gaan afleggen. Dat scheelt meer dan de helft. Sturen ging dezelfde
+kant op: de vleugel alleen heeft een halve seconde overhelling nodig voor de neus
+ergens is, dus heeft de staart er een directe bijdrage bij gekregen. Een bocht van
+90 graden duurde twee seconden en duurt er nu iets meer dan één.
+
+**Leunen moest ook echt iets vragen.** De stuuruitslag was zo zuinig afgesteld dat
+een flinke schouderdaling van 35 graden om nog geen driekwart bocht vroeg, en een
+gewone van vijftien om een vijfde. Je leunde met je hele lijf en de vogel helde
+een kwart over — dat is waar "stug" vandaan kwam. Nu geeft twintig graden ruim de
+helft en dertig graden alles, en het filter dat de meting glad hield is zo
+afgesteld dat het volgen 0,15 in plaats van 0,39 seconde kost.
+
 **Framerate doet er niet toe.** De camera levert trager dan het scherm tekent,
 dus de tracker geeft tussendoor hetzelfde resultaat terug. Dat opnieuw filteren
 liet dezelfde armbeweging als 0,64 tellen bij 30 fps en als 1,07 bij 120 fps.
 Nu wordt er alleen op nieuwe beelden gemeten en schuift de uitvoer elk frame
 soepel mee. De physics loopt op een vaste stap van 1/120 s, zodat een duik
 overal hetzelfde voelt en niet dwars door een boomtop heen schiet.
+
+**Het past zich aan je laptop aan.** Het spel draait naast een pose-model dat de
+videokaart ook wil hebben. Het meet hoe lang het werk per beeld duurt en tekent op
+lagere resolutie zodra dat structureel te lang wordt — gemeten aan het werk, niet
+aan de tijd tússen beelden, want op een 30 Hz-scherm zit er ook zonder enige
+zwaarte 33 ms tussen. Gaat het daarna lang genoeg goed, dan schakelt het weer op;
+na de tweede keer terugschakelen blijft het laag, zodat het niet blijft heen en
+weer springen.
 
 **Uit beeld lopen pauzeert.** Korte haperingen worden opgevangen door naar een
 neutrale glijvlucht te zakken; pas echte afwezigheid zet het spel stil, en bij
